@@ -1,0 +1,153 @@
+=== Gomoku Analysis Log - 20260125_101919 ===
+
+[10:19:26.660] [REPORT] Game loaded successfully: 50 moves.
+[10:19:27.177] [INFO  ] Starting analysis from Move #4 (Index 3)
+[10:19:27.179] [REPORT] Analysis started...
+[10:19:27.185] [INFO  ] Engine State changed to: STARTING
+[10:19:27.185] [INFO  ] Engine started: /media/ngmint/Data/Programming/Python/Personal/GomoProb/engine/rapfi
+[10:19:27.185] [STDIN ] START 15
+[10:19:27.270] [STDOUT] MESSAGE Load config from config.toml
+[10:19:27.271] [STDOUT] MESSAGE Setting default thread num to 8.
+[10:19:27.282] [STDOUT] MESSAGE Evaluator set to mix9svq.
+[10:19:27.282] [STDOUT] OK
+[10:19:27.282] [STDIN ] INFO RULE 1
+[10:19:27.282] [STDIN ] INFO TIMEOUT_MATCH 2147483647
+[10:19:27.282] [STDIN ] INFO TIMEOUT_TURN 2147483647
+[10:19:27.282] [CMD   ] INFO TIMEOUT_MATCH/TURN UNLIMITED
+[10:19:27.282] [INFO  ] Engine State changed to: IDLE
+[10:19:27.282] [STAGE ] 
+[10:19:27.282] [STAGE ] ==================================================
+[10:19:27.282] [STAGE ] V2 ANALYZING MOVE #4: k5
+[10:19:27.282] [STAGE ] ==================================================
+[10:19:27.282] [INFO  ] Engine State changed to: ANALYZING
+[10:19:27.282] [STDIN ] STOP
+[10:19:27.283] [CMD   ] STOP (reset for fresh search)
+[10:19:27.382] [STAGE ] INPUT: Position [3 moves]: n3(B) n2(W) k2(B)
+[10:19:27.382] [STDIN ] YXBOARD
+[10:19:27.382] [STDIN ] 13,12,1
+[10:19:27.382] [STDIN ] 13,13,2
+[10:19:27.383] [STDIN ] 10,13,1
+[10:19:27.383] [STDIN ] DONE
+[10:19:27.383] [STDIN ] YXNBEST 5
+[10:19:27.384] [STDOUT] MESSAGE mix9svq nnue: load weight from mix9svqstandard_bs15.bin.lz4
+[10:19:27.414] [STDOUT] MESSAGE mix9svq nnue: weight loaded in 30ms
+[10:19:27.419] [STDOUT] MESSAGE depth 2-3 multipv 1 ev -137 n 432 n/ms 432 tm 1 pv K5 L4
+[10:19:27.419] [STDOUT] MESSAGE depth 2-3 multipv 2 ev -141 n 926 n/ms 926 tm 1 pv J5 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 2-3 multipv 3 ev -149 n 1311 n/ms 1311 tm 1 pv K6 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 2-3 multipv 4 ev -176 n 1685 n/ms 1685 tm 1 pv J6 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 2-3 multipv 5 ev -164 n 2104 n/ms 2104 tm 1 pv L6 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 3-4 multipv 1 ev -100 n 2502 n/ms 2502 tm 1 pv K5 L4 J5
+[10:19:27.419] [STDOUT] MESSAGE depth 3-4 multipv 2 ev -141 n 2855 n/ms 2855 tm 1 pv J5 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 3-4 multipv 3 ev -142 n 3229 n/ms 3229 tm 1 pv K6 K5 L5
+[10:19:27.419] [STDOUT] MESSAGE depth 3-3 multipv 4 ev -164 n 3611 n/ms 3611 tm 1 pv L6 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 3-4 multipv 5 ev -120 n 3988 n/ms 3988 tm 1 pv J6 L5 K5
+[10:19:27.419] [STDOUT] MESSAGE depth 4-4 multipv 1 ev -98 n 4320 n/ms 4320 tm 1 pv L5 K6 J6
+[10:19:27.419] [STDOUT] MESSAGE depth 4-5 multipv 2 ev -54 n 4659 n/ms 2329 tm 2 pv J6 L5
+[10:19:27.419] [STDOUT] MESSAGE depth 4-5 multipv 3 ev -142 n 5091 n/ms 2545 tm 2 pv K6 K5 L5
+[10:19:27.419] [STDOUT] MESSAGE depth 4-5 multipv 4 ev -153 n 5341 n/ms 2670 tm 2 pv K5 L4 J5 I5
+[10:19:27.419] [STDOUT] MESSAGE depth 4-5 multipv 5 ev -132 n 5696 n/ms 2848 tm 2 pv J5 K5 I6 K4
+[10:19:27.419] [STDOUT] MESSAGE depth 5-6 multipv 1 ev -141 n 6894 n/ms 3447 tm 2 pv L5 K6 J6 I5 L7
+[10:19:27.419] [STDOUT] MESSAGE depth 5-7 multipv 2 ev -13 n 7769 n/ms 2589 tm 3 pv K5 L4 L6 J4 K4 K6
+[10:19:27.419] [STDOUT] MESSAGE depth 5-7 multipv 3 ev -193 n 9963 n/ms 3321 tm 3 pv J6 K5 L5 K4 K6 J7
+[10:19:27.420] [STDOUT] MESSAGE depth 5-7 multipv 4 ev -208 n 13K n/ms 2694 tm 5 pv L6 K5 J5 L5 M5 K7
+[10:19:27.420] [STDOUT] MESSAGE depth 5-7 multipv 5 ev -195 n 14K n/ms 2900 tm 5 pv K6 K5 L5 J7 I7 I6
+[10:19:27.420] [STDOUT] MESSAGE depth 6-8 multipv 1 ev 12 n 15K n/ms 3109 tm 5 pv K5 L4 L6 J4 K4 K6 J7
+[10:19:27.421] [STDOUT] MESSAGE depth 6-8 multipv 2 ev -131 n 16K n/ms 2804 tm 6 pv L5 K6 K7 J8 I6 I7 H6
+[10:19:27.421] [STDOUT] MESSAGE depth 6-8 multipv 3 ev -171 n 18K n/ms 3012 tm 6 pv K6 K5 L5 J7 J8 I6 H5
+[10:19:27.422] [STDOUT] MESSAGE depth 6-8 multipv 4 ev -208 n 18K n/ms 2693 tm 7 pv L6 K5 J5 L5 M5 K7
+[10:19:27.423] [STDOUT] MESSAGE depth 6-10 multipv 5 ev -91 n 21K n/ms 2679 tm 8 pv J5 K5 K6 L7 K8 L5 L6
+[10:19:27.424] [STDOUT] MESSAGE depth 7-8 multipv 1 ev 25 n 21K n/ms 2740 tm 8 pv K5 K4 J5 I5 H6 J6 H4
+[10:19:27.424] [STDOUT] MESSAGE depth 7-10 multipv 2 ev -91 n 22K n/ms 2807 tm 8 pv K6 K5 J5 L7 K8 L5 L6
+[10:19:27.424] [STDOUT] MESSAGE depth 7-10 multipv 3 ev -91 n 22K n/ms 2865 tm 8 pv J5 K5 K6 L7 K8 L5 L6
+[10:19:27.424] [STDOUT] MESSAGE depth 7-11 multipv 4 ev -85 n 25K n/ms 2518 tm 10 pv J6 K5 L5 K4 K6 J7 I6 H6
+[10:19:27.425] [STDOUT] MESSAGE depth 7-8 multipv 5 ev -172 n 26K n/ms 2649 tm 10 pv L5 I5 K7 J4 H6 I4 I6
+[10:19:27.425] [STDOUT] MESSAGE depth 8-8 multipv 1 ev 25 n 27K n/ms 2744 tm 10 pv K5 K4 J5 I5 H6 J6 H4
+[10:19:27.427] [STDOUT] MESSAGE depth 8-11 multipv 2 ev -124 n 28K n/ms 2603 tm 11 pv K6 K5 J7 L5 M5 I6 I5 K4
+[10:19:27.429] [STDOUT] MESSAGE depth 8-12 multipv 3 ev -98 n 31K n/ms 2422 tm 13 pv J5 K5 K6 L7 L6 J8 I6 J6 I7
+[10:19:27.431] [STDOUT] MESSAGE depth 8-14 multipv 4 ev -115 n 37K n/ms 2313 tm 16 pv J6 K6 K7 L8 K5 L4 J7 L7 J5
+[10:19:27.433] [STDOUT] MESSAGE depth 8-11 multipv 5 ev -145 n 39K n/ms 2217 tm 18 pv L5 I5 K6 J4 H6 J7 J5
+[10:19:27.434] [STDOUT] MESSAGE depth 9-8 multipv 1 ev 25 n 40K n/ms 2256 tm 18 pv K5 K4 J5 I5 H6 J6 H4
+[10:19:27.443] [STDOUT] MESSAGE depth 9-11 multipv 2 ev -117 n 42K n/ms 2139 tm 20 pv J5 K5 K6 L7 L6 J8 I7 I6 J9 M6
+[10:19:27.443] [STDOUT] MESSAGE depth 9-12 multipv 3 ev -101 n 44K n/ms 2096 tm 21 pv K6 L5 J5 I4 I6 K4 J6 H6 J4
+[10:19:27.444] [STDOUT] MESSAGE depth 9-12 multipv 4 ev -114 n 44K n/ms 2018 tm 22 pv J6 K5 K4 L5 M5 L7 J7 J8 K8 I6 I5
+[10:19:27.444] [STDOUT] MESSAGE depth 9-11 multipv 5 ev -93 n 47K n/ms 1979 tm 24 pv L5 L6 K7 K8 J5 I5 J7 I7
+[10:19:27.448] [STDOUT] MESSAGE depth 10-14 multipv 1 ev -53 n 60K n/ms 1840 tm 33 pv K5 L4 L6 J4 K4 I5 H6 K3 M5 K7 J6 I6 I7
+[10:19:27.459] [STDOUT] MESSAGE depth 10-17 multipv 2 ev -38 n 77K n/ms 1771 tm 44 pv L6 K5 J5 L5 M5 K6 K7 J8 J7 I7
+[10:19:27.467] [STDOUT] MESSAGE depth 10-15 multipv 3 ev -41 n 89K n/ms 1725 tm 52 pv J6 L4 K4 M5 L5 M6 K8
+[10:19:27.468] [STDOUT] MESSAGE depth 10-13 multipv 4 ev -91 n 91K n/ms 1726 tm 53 pv J5 K5 L6 L5 M5 J8 K6 L7 K8 I6 I7 J10
+[10:19:27.472] [STDOUT] MESSAGE depth 10-15 multipv 5 ev -133 n 96K n/ms 1695 tm 57 pv L5 I5 J4 K6 J6 J5 L7 K4 I6 K5 K3 L3 N1
+[10:19:27.473] [STDOUT] MESSAGE depth 11-16 multipv 1 ev -38 n 98K n/ms 1704 tm 58 pv K5 L4 L6 J4 K4 I5 H6 K3 M5 K7 J6 I6 I7 H8 J9
+[10:19:27.481] [STDOUT] MESSAGE depth 11-20 multipv 2 ev -84 n 110K n/ms 1675 tm 66 pv J5 K5 L6 K6 J7 K8 K7 L7 M6 J8 I8 H7 H6
+[10:19:27.542] [STDOUT] MESSAGE depth 11-21 multipv 3 ev -115 n 197K n/ms 1578 tm 125 pv L6 J6 J5 K8 L7 L8 M8 K6 K7 J8 J7 M7
+[10:19:27.546] [STDOUT] MESSAGE depth 11-20 multipv 4 ev -92 n 205K n/ms 1578 tm 130 pv J6 K5 K4 L5 M5 J7 K6 I6 H5 L7
+[10:19:27.552] [STDOUT] MESSAGE depth 11-15 multipv 5 ev -111 n 213K n/ms 1561 tm 137 pv K6 K5 J5 L7 L6 J8 I7 I6 H9 K8 M6 N6 J7 I8
+[10:19:27.554] [STDOUT] MESSAGE depth 12-16 multipv 1 ev -38 n 218K n/ms 1570 tm 139 pv K5 L4 L6 J4 K4 I5 H6 K3 M5 K7 J6 I6 I7 H8 J9
+[10:19:27.607] [STDOUT] MESSAGE depth 12-22 multipv 2 ev -104 n 286K n/ms 1502 tm 191 pv J5 K5 K6 L7 L6 J8 I7 I6 H9 K8 M6 N6 J7 I8 H8
+[10:19:27.666] [STDOUT] MESSAGE depth 12-21 multipv 3 ev -123 n 357K n/ms 1428 tm 250 pv L5 K6 K7 J8 J6 I5 L7 L8 I8 I7 H6 H5 G5 J10 K9 K10
+[10:19:27.732] [STDOUT] MESSAGE depth 12-20 multipv 4 ev -138 n 444K n/ms 1400 tm 317 pv L6 J6 J5 K8 K5 L7 M6 I5 K7 J4 H6 J8 I8 J10 K4 K6 H7
+[10:19:27.809] [STDOUT] MESSAGE depth 12-24 multipv 5 ev -103 n 553K n/ms 1404 tm 394 pv J6 K4 J5 J4 K6 L6 K5 L4 I4 L7 L5 I5 H6 M4 N4 M5 M3
+[10:19:27.847] [STDOUT] MESSAGE depth 13-21 multipv 1 ev -57 n 602K n/ms 1394 tm 432 pv K5 L4 L6 J4 K4 I5 H6 K3 M5 K7 J6 I6 I7 G5 H5 H4 F6 H8 J9
+[10:19:27.865] [STDOUT] MESSAGE depth 13-18 multipv 2 ev -61 n 621K n/ms 1390 tm 447 pv J5 K5 L6 L5 M5 K7 K6 M6 K8 I4 J3 H6 H7 I6 I5 F6 G6
+[10:19:27.923] [STDOUT] MESSAGE depth 13-25 multipv 3 ev -110 n 698K n/ms 1374 tm 508 pv L6 K5 J5 L5 M5 K7 K6 M6 K8 I4 J3 H6 I7 H4 I5 F6 J4
+[10:19:27.938] [STDOUT] MESSAGE depth 13-19 multipv 4 ev -111 n 718K n/ms 1375 tm 522 pv K6 J6 I7 M5 J5 M4 M3 L7 K8 L4 K4 L6 K7 K5 L5 N6
+[10:19:27.964] [STDOUT] MESSAGE depth 13-27 multipv 5 ev -88 n 754K n/ms 1374 tm 549 pv K4 J6 J7 K7 I5 L6 M5 K8 K6 I8 J8 L7 J9 K5 L8 M7
+[10:19:27.981] [STDOUT] MESSAGE depth 14-22 multipv 1 ev -18 n 777K n/ms 1372 tm 566 pv K5 L4 L6 J4 K4 I5 H6 K3 M5 K7 J6 I6 I7 G5 H5 H4 I3 H8 J9 J8
+[10:19:28.094] [STDOUT] MESSAGE depth 14-29 multipv 2 ev -124 n 930K n/ms 1369 tm 679 pv K4 J6 J7 K7 I5 L6 M5 K8 K6 I8 J8 L7 J9 K5 L8 M7 N8 J10 I3 I7 H8 L4 M3 M6 O4
+[10:19:28.118] [STDOUT] MESSAGE depth 14-29 multipv 3 ev -77 n 962K n/ms 1371 tm 702 pv J5 K5 L6 L5 M5 K7 K6 M6 K8 K4 J3 J6 L8 I7 L4 I4 M8 J8 K3 J2 L7 N9 N6 O7 K9
+[10:19:28.310] [STDOUT] MESSAGE depth 14-28 multipv 4 ev -99 n 1227K n/ms 1374 tm 893 pv L6 J6 J5 K8 K5 L7 M6 I5 K7 J4 H6 J8 H7 J9 J10 H9 I8 I6 I10 I9 K9 I4
+[10:19:28.412] [STDOUT] MESSAGE depth 14-28 multipv 5 ev -75 n 1368K n/ms 1374 tm 997 pv J6 K5 K4 L5 M5 J7 K6 I6 H5 K8 L8 K7 L7 L9 M10 H7 I4 J5 G7 G6 J4 H4 H6
+[10:19:28.422] [STDOUT] MESSAGE depth 15-22 multipv 1 ev -34 n 1381K n/ms 1372 tm 1007 pv K5 L4 L6 J4 K4 I5 H6 K3 M5 K7 J6 I6 I7 G5 H5 H4 I3 H8 J9 J8 G8
+[10:19:28.533] [STDOUT] MESSAGE depth 15-28 multipv 2 ev -88 n 1535K n/ms 1376 tm 1116 pv J6 K5 K4 L5 M5 J7 K6 I6 H5 L7 M7 K8 M6 L9 M10 L6 L8 M4 L4 K9 J9 I7 H7 I5 I4
+[10:19:28.638] [STDOUT] MESSAGE depth 15-30 multipv 3 ev -63 n 1663K n/ms 1361 tm 1222 pv J5 K5 L6 L5 M5 K7 K6 M6 K4 I4 I7 I6 G7 K8 L7 L8 J7 K9 J8 J6 M9 H7
+[10:19:28.644] [STDOUT] MESSAGE depth 15-24 multipv 4 ev -99 n 1671K n/ms 1359 tm 1229 pv L6 J6 J5 K8 K5 L7 M6 I5 K7 J4 H6 J8 H7 J9 J10 H9 I8 I6 I10 I9 K9
+[10:19:28.670] [STDOUT] MESSAGE depth 15-22 multipv 5 ev -137 n 1702K n/ms 1356 tm 1255 pv K6 J6 I5 L7 K5 K4 J5 L5 M6 L6 L4 H5 K9 K8 J10 G6 L9 I4
+[10:19:28.995] [STDOUT] MESSAGE depth 16-30 multipv 1 ev -42 n 2065K n/ms 1308 tm 1579 pv K5 J6 J5 I5 K7 K6 L6 J8 H6 I8 J7 L7 J9 H7 G8 G9
+[10:19:29.044] [STDOUT] MESSAGE depth 16-25 multipv 2 ev -82 n 2114K n/ms 1297 tm 1629 pv J5 K5 K6 L7 K8 M5 L5 M4 M3 J4 L6 I6 I8 J7 N6 M6 I7 H6 I5 G4 H5 F5
+[10:19:29.184] [STDOUT] MESSAGE depth 16-33 multipv 3 ev -131 n 2254K n/ms 1276 tm 1766 pv J6 K5 K4 L5 M5 J7 K6 I6 H5 L7 M7 K8 M6 L9 M10 L6 L8 M4 L4 K9 I5 H4 J9 G5 F6 K10
+[10:19:29.389] [STDOUT] MESSAGE depth 16-42 multipv 4 ev -119 n 2497K n/ms 1265 tm 1973 pv L6 K5 J5 L5 M5 K7 K6 M6 K4 I4 I7 I6 G7 K8 L7 L8 J7 K9 J6 J8 M8 N9 K10 H8 I8 H7 H9 G10 I11 I10
+[10:19:29.925] [STDOUT] MESSAGE depth 16-38 multipv 5 ev -137 n 3046K n/ms 1216 tm 2504 pv K4 J6 I5 K5 L5 M6 I7 L6 I6 K6 N6 I4 L7 H7 K9 M7 J4 H6 I9 I8 H8 J9
+[10:19:30.234] [STDOUT] MESSAGE depth 17-33 multipv 1 ev -74 n 3385K n/ms 1201 tm 2819 pv K5 J6 J7 J5 K4 K6 L6 L7 I4 J4 K8 L9 M8 J3 J2 J8 G5 K9 L10 I9 J9 I11
+[10:19:30.601] [STDOUT] MESSAGE depth 17-37 multipv 2 ev -114 n 3804K n/ms 1194 tm 3186 pv L6 K5 J5 L5 M5 K7 K6 M6 K4 I4 I7 I6 G7 K8 L7 L8 J7 K9 J6 J8 M8 N9 J4 J3 H6 H8 I8 I5 G6 F7
+[10:19:30.711] [STDOUT] MESSAGE depth 17-37 multipv 3 ev -87 n 3917K n/ms 1190 tm 3290 pv J5 K5 L6 L5 M5 K7 K6 M6 K4 I4 I7 I6 G7 H5 G4 G6 F7 H7 H6 I5 F4 G5 F5 F6 H4 K8 L7
+[10:19:31.487] [STDOUT] MESSAGE depth 17-37 multipv 4 ev -137 n 4711K n/ms 1157 tm 4072 pv K6 J6 L5 J7 J8 I7 K7 K5 H8 J4 L6 L4 M3 I9 K4 M6 I6 K8 L7 J5 J3 F7 G7 G6 F8
+[10:19:31.739] [STDOUT] MESSAGE depth 17-33 multipv 5 ev -97 n 4986K n/ms 1153 tm 4323 pv K4 J6 J7 I7 K5 K6 L6 J4 L8 L7 K8 M8 J5 I6 I5 H5 G6 J10 I9 J8 J11 F8 K9
+[10:19:31.824] [STDOUT] MESSAGE depth 18-30 multipv 1 ev -33 n 5072K n/ms 1150 tm 4409 pv K5 L4 K4 L6 L5 K6 M6 N7 I5 J5 J8 J3 I4 N6 N8 K3 M5 I3 L3 L9
+[10:19:32.121] [STDOUT] MESSAGE depth 18-34 multipv 2 ev -73 n 5384K n/ms 1144 tm 4706 pv J5 K5 L6 L5 M5 K7 K6 M6 K4 I4 I7 I6 G7 H5 G4 G6 F7 H7 H6 I5 F4 G5 F5 F6 H4 K8 L7 I2 I3
+[10:19:32.335] [STDOUT] MESSAGE depth 18-32 multipv 3 ev -68 n 5591K n/ms 1136 tm 4919 pv L6 J6 J5 K8 K5 L7 M6 I5 K7 J4 H6 J8 I8 J10 K4 K6 H7 J9 J7 I6 I10 H9 I11
+[10:19:32.393] [STDIN ] STOP
+[10:19:32.394] [STDOUT] 10,10
+[10:19:32.394] [STAGE ] STOP was sent via synchronous time-limit
+[10:19:32.395] [INFO  ] NBEST Raw: Move=k11, Winrate=0.45760205922564895, Score=-68
+[10:19:32.395] [STAGE ] DEBUG: all_info has 88 entries
+[10:19:32.395] [STAGE ] DEBUG: multipv distribution = {1: 22, 2: 17, 3: 17, 4: 16, 5: 16}
+[10:19:32.395] [STAGE ] DEBUG Candidate k5: Depth=18 N=5072000
+[10:19:32.395] [STAGE ] DEBUG Candidate j5: Depth=18 N=5384000
+[10:19:32.395] [STAGE ] DEBUG Candidate l6: Depth=18 N=5591000
+[10:19:32.395] [STAGE ] DEBUG Candidate k6: Depth=17 N=4711000
+[10:19:32.395] [STAGE ] DEBUG Candidate k4: Depth=17 N=4986000
+[10:19:32.395] [STAGE ] === NBEST 5 CANDIDATES ===
+[10:19:32.395] [STAGE ]   #1: k5 | WR 47.9%
+[10:19:32.395] [STAGE ]   #2: j5 | WR 45.5%
+[10:19:32.395] [STAGE ]   #3: l6 | WR 45.8%
+[10:19:32.395] [STAGE ]   #4: k6 | WR 41.5%
+[10:19:32.395] [STAGE ]   #5: k4 | WR 44.0%
+[10:19:32.395] [STAGE ] ==============================
+[10:19:32.395] [INFO  ] Engine State changed to: IDLE
+[10:19:32.395] [STAGE ]   Complexity: 0.42 (Impact=0.08, Var=0.16)
+[10:19:32.395] [STAGE ]   Prev WR: 50.0% → Best WR: 47.9%
+[10:19:32.395] [STAGE ]   Best: k5 | WR 47.9%
+[10:19:32.395] [STAGE ]   Played: k5 | WR 47.9%
+[10:19:32.395] [STAGE ]   Δ = 0.0%
+[10:19:32.396] [STAGE ]   P(Cheat) running = 3.4%
+[10:19:32.396] [STAGE ]   --- Opponent Analysis ---
+[10:19:32.396] [INFO  ] Engine State changed to: ANALYZING
+[10:19:32.396] [STDIN ] STOP
+[10:19:32.396] [CMD   ] STOP (reset for fresh search)
+[10:19:32.495] [STAGE ] INPUT: Position [4 moves]: n3(B) n2(W) k2(B) k5(W)
+[10:19:32.495] [STDIN ] YXBOARD
+[10:19:32.495] [STDIN ] 13,12,1
+[10:19:32.495] [STDIN ] 13,13,2
+[10:19:32.496] [STDIN ] 10,13,1
+[10:19:32.496] [STDIN ] 10,10,2
+[10:19:32.496] [STDIN ] DONE
+[10:19:32.496] [INFO  ] Engine State changed to: IDLE

@@ -1,0 +1,109 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "external/zip/libzip.a"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"target_include_directories"
+		],
+		"files" : 
+		[
+			"external/zip/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 21,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 36,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : " -Wall -Wextra -Wno-error -pedantic -O3 -DNDEBUG -fPIC -fvisibility=hidden"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 2,
+					"path" : "/media/ngmint/Data/Programming/Python/Personal/GomoProb/rapfi/Rapfi/external/zip/src"
+				}
+			],
+			"language" : "C",
+			"sourceIndexes" : 
+			[
+				2
+			]
+		}
+	],
+	"id" : "zip::@54eb83aa268fb5490d05",
+	"name" : "zip",
+	"nameOnDisk" : "libzip.a",
+	"paths" : 
+	{
+		"build" : "external/zip",
+		"source" : "external/zip"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Header Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1
+			]
+		},
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				2
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"path" : "external/zip/src/miniz.h",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "external/zip/src/zip.h",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "external/zip/src/zip.c",
+			"sourceGroupIndex" : 1
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}

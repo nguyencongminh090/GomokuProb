@@ -1,0 +1,264 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8
+					],
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18.2"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						1
+					]
+				},
+				{
+					"build" : "external/cpptoml",
+					"jsonFile" : "directory-external.cpptoml-Debug-b0baec67f25809ff3c96.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "external/cpptoml"
+				},
+				{
+					"build" : "external/cxxopts",
+					"jsonFile" : "directory-external.cxxopts-Debug-5cf0e2b499cd148a9056.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 2,
+					"source" : "external/cxxopts"
+				},
+				{
+					"build" : "external/lz4",
+					"jsonFile" : "directory-external.lz4-Debug-37a0799b5f3fc12cd19a.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 3,
+					"source" : "external/lz4",
+					"targetIndexes" : 
+					[
+						0
+					]
+				},
+				{
+					"build" : "external/simde",
+					"jsonFile" : "directory-external.simde-Debug-a014e61dfd388685a77d.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 4,
+					"source" : "external/simde"
+				},
+				{
+					"build" : "external/flat.hpp",
+					"jsonFile" : "directory-external.flat.hpp-Debug-491a057d0c56bcbdc49f.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.8"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 5,
+					"source" : "external/flat.hpp"
+				},
+				{
+					"build" : "external/zip",
+					"jsonFile" : "directory-external.zip-Debug-f2c32abb8a225d87d383.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.14"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 6,
+					"source" : "external/zip",
+					"targetIndexes" : 
+					[
+						2
+					]
+				},
+				{
+					"build" : "external/libnpy",
+					"jsonFile" : "directory-external.libnpy-Debug-55b132f9c45e9a3beb76.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 7,
+					"source" : "external/libnpy"
+				},
+				{
+					"build" : "external/thread-pool",
+					"jsonFile" : "directory-external.thread-pool-Debug-33b1292e009a6b005f6e.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 8,
+					"source" : "external/thread-pool"
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"childIndexes" : 
+					[
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "rapfi",
+					"targetIndexes" : 
+					[
+						1
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						1
+					],
+					"name" : "cpptoml",
+					"parentIndex" : 0
+				},
+				{
+					"directoryIndexes" : 
+					[
+						2
+					],
+					"name" : "cxxopts",
+					"parentIndex" : 0
+				},
+				{
+					"directoryIndexes" : 
+					[
+						3
+					],
+					"name" : "lz4",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						0
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						4
+					],
+					"name" : "simde",
+					"parentIndex" : 0
+				},
+				{
+					"directoryIndexes" : 
+					[
+						5
+					],
+					"name" : "flat.hpp",
+					"parentIndex" : 0
+				},
+				{
+					"directoryIndexes" : 
+					[
+						6
+					],
+					"name" : "zip",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						2
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						7
+					],
+					"name" : "libnpy",
+					"parentIndex" : 0
+				},
+				{
+					"directoryIndexes" : 
+					[
+						8
+					],
+					"name" : "BS_thread_pool",
+					"parentIndex" : 0
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 3,
+					"id" : "lz4::@5034d83536e62844b9cd",
+					"jsonFile" : "target-lz4-Debug-f981c2561f47e62adee1.json",
+					"name" : "lz4",
+					"projectIndex" : 3
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "rapfi::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-rapfi-Debug-7007d92347670b201b94.json",
+					"name" : "rapfi",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 6,
+					"id" : "zip::@54eb83aa268fb5490d05",
+					"jsonFile" : "target-zip-Debug-4331a82eb477512e0fce.json",
+					"name" : "zip",
+					"projectIndex" : 6
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/media/ngmint/Data/Programming/Python/Personal/GomoProb/build",
+		"source" : "/media/ngmint/Data/Programming/Python/Personal/GomoProb/rapfi/Rapfi"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

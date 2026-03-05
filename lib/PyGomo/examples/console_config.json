@@ -1,0 +1,17 @@
+{
+    "_help": "Move items from 'fields' to 'disabled_fields' to hide them. Supported fields: depth, eval, winrate, nps, nodes, time, lenPV, pv",
+    "show_info": true,
+    "pv_length": 5,
+    "fields": [
+        "depth",
+        "eval",
+        "winrate",
+        "nps",
+        "time",
+        "pv"
+    ],
+    "disabled_fields": [
+        "nodes",
+        "lenPV"
+    ]
+}

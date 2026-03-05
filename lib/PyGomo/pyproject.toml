@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pygomo-lib"
+version = "0.1.1"
+description = "A clean, extensible Python library for communicating with Gomoku engines via the Gomocup protocol."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT License"}
+authors = [
+  {name = "PyGomo Contributors"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Games/Entertainment :: Board Games",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "sphinx>=7.0",
+    "furo",
+    "myst-parser",
+    "sphinx-copybutton",
+]
+
+[project.scripts]
+pygomo-console = "pygomo.console:main"
+
+[project.urls]
+Homepage = "https://github.com/nguyencongminh090/pygomo"
+Repository = "https://github.com/nguyencongminh090/pygomo"
+Issues = "https://github.com/nguyencongminh090/pygomo/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
