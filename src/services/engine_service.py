@@ -5,13 +5,8 @@ Wraps PyGomo EngineClient to provide high-level analysis capabilities.
 
 import os
 import sys
-from typing import List, Optional
+from typing import List, Optional, Callable, Dict, Any
 
-# # Add PyGomo to path
-# PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# PYGOMO_PATH = os.path.join(PROJECT_ROOT, "lib", "PyGomo", "src")
-# if PYGOMO_PATH not in sys.path:
-#     sys.path.insert(0, PYGOMO_PATH)
 
 from PyQt6.QtCore import QObject, pyqtSignal
 from pygomo import EngineClient, BoardPosition, Move as PyGomoMove, SearchInfo
@@ -47,7 +42,7 @@ class EngineService(QObject):
         super().__init__()
         self.engine_path = engine_path
         self.client: Optional[EngineClient] = None
-        self.log_callback = None
+        self.log_callback: Optional[Callable[[str, str], None]] = None
         self._state = EngineState.OFF
         
     @property
@@ -60,7 +55,7 @@ class EngineService(QObject):
             self.state_changed.emit(new_state)
             self._log("INFO", f"Engine State changed to: {new_state.name}")
         
-    def set_logger(self, callback):
+    def set_logger(self, callback: Callable[[str, str], None]):
         self.log_callback = callback
         
     def _log(self, type_: str, msg: str):
@@ -69,7 +64,8 @@ class EngineService(QObject):
 
     def start(self, rule: int = 0):
         """Start the engine process."""
-        if self.client and self.client.is_connected:
+        client = self.client
+        if client and client.is_connected:
             return
             
         self._set_state(EngineState.STARTING)
@@ -77,20 +73,21 @@ class EngineService(QObject):
             working_dir = os.path.dirname(self.engine_path)
             
             # Pass io_logger to transport for raw stdin/stdout logging
-            self.client = EngineClient(
+            client = EngineClient(
                 self.engine_path, 
                 working_directory=working_dir,
                 io_logger=self._log
             )
-            self.client.connect()
+            self.client = client
+            client.connect()
             self._log("INFO", f"Engine started: {self.engine_path}")
             
-            self.client.start(15)
-            self.client.set_rule(rule)
+            client.start(15)
+            client.set_rule(rule)
             
             # Set Unlimited Time for Time-Wrapped mode
-            self.client.execute("INFO", "TIMEOUT_MATCH", 2147483647)
-            self.client.execute("INFO", "TIMEOUT_TURN", 2147483647)
+            client.execute("INFO", "TIMEOUT_MATCH", 2147483647)
+            client.execute("INFO", "TIMEOUT_TURN", 2147483647)
             self._log("CMD", "INFO TIMEOUT_MATCH/TURN UNLIMITED")
             
             self._set_state(EngineState.IDLE)
@@ -101,11 +98,12 @@ class EngineService(QObject):
         
     def shutdown(self):
         """Hard Stop: Quit and Disconnect engine."""
-        if self.client:
+        client = self.client
+        if client:
             self._set_state(EngineState.STOPPING)
             try:
-                self.client.quit()
-                self.client.disconnect()
+                client.quit()
+                client.disconnect()
             except:
                 pass
             self.client = None
@@ -115,15 +113,17 @@ class EngineService(QObject):
     def stop_search(self):
         """Soft Stop: Interrupt search but keep engine alive."""
         self._log("INFO", "Soft Stop requested...")
-        if self.client:
+        client = self.client
+        if client:
             try:
-                self.client.stop()
+                client.stop()
             except Exception as e:
                 self._log("ERROR", f"Soft stop failed: {e}")
             
     def _setup_board_yx(self, moves: List[Move]):
         """Send YXBOARD command to setup board."""
-        if not self.client:
+        client = self.client
+        if not client:
             raise RuntimeError("Engine client is None in _setup_board_yx")
             
         self._reset_engine()
@@ -134,19 +134,20 @@ class EngineService(QObject):
         else:
             self._log("STAGE", "INPUT: Empty board")
         
-        self.client.send_raw("YXBOARD")
+        client.send_raw("YXBOARD")
         for m in moves:
             field = m.color
-            self.client.send_raw(f"{m.x},{m.y},{field}")
-        self.client.send_raw("DONE")
+            client.send_raw(f"{m.x},{m.y},{field}")
+        client.send_raw("DONE")
 
     def _reset_engine(self):
         """Reset engine state before new position analysis."""
-        if not self.client:
+        client = self.client
+        if not client:
             return
             
         try:
-            self.client.stop()
+            client.stop()
             self._log("CMD", "STOP (reset for fresh search)")
             import time
             time.sleep(0.1)
@@ -162,7 +163,8 @@ class EngineService(QObject):
             self._set_state(EngineState.IDLE)
 
     def _analyze_impl(self, board: BoardState, top_n: int = 5, time_limit: float = 1.0, node_limit: int = 0) -> List[MoveEvaluation]:
-        if not self.client:
+        client = self.client
+        if not client:
             raise RuntimeError("Engine not started")
             
         self._setup_board_yx(board.moves)
@@ -170,9 +172,9 @@ class EngineService(QObject):
         candidates: List[MoveEvaluation] = []
         
         if node_limit is not None and node_limit > 0:
-            self.client.execute("INFO", "MAX_NODE", node_limit)
+            client.execute("INFO", "MAX_NODE", node_limit)
         
-        last_search_info = {}
+        last_search_info: Dict[str, Any] = {}
         
         def on_search_info(info):
             """Callback for realtime search info."""
@@ -197,7 +199,7 @@ class EngineService(QObject):
             last_search_info['depth'] = depth
 
         try:
-            result = self.client.nbest_time_limited(
+            result = client.nbest_time_limited(
                 count=top_n, 
                 time_limit=time_limit, 
                 on_info=on_search_info
@@ -218,14 +220,14 @@ class EngineService(QObject):
             return candidates
 
         # Build candidates from all_info
-        multipv_map = {}
-        if hasattr(result, 'all_info') and result.all_info:
+        multipv_map: Dict[int, Any] = {}
+        if hasattr(result, 'all_info') and getattr(result, 'all_info', None):
             self._log("STAGE", f"DEBUG: all_info has {len(result.all_info)} entries")
             for info in result.all_info:
                 mpv = getattr(info, 'multipv', 1)
                 multipv_map[mpv] = info
-        elif hasattr(result, 'search_info') and result.search_info:
-            multipv_map[1] = result.search_info
+        elif hasattr(result, 'search_info') and getattr(result, 'search_info', None):
+            multipv_map[1] = getattr(result, 'search_info', None)
         
         for mpv_idx in sorted(multipv_map.keys()):
             info = multipv_map[mpv_idx]
@@ -292,10 +294,14 @@ class EngineService(QObject):
 
     def evaluate_move(self, board: BoardState, move: Move, time_limit: float = 1.0) -> MoveEvaluation:
         """Evaluate a specific move made by player."""
+        client = self.client
+        if not client:
+            raise RuntimeError("Engine not started")
+            
         temp_moves = board.moves + [move]
         self._setup_board_yx(temp_moves)
         
-        last_info = {'winrate': None, 'score': None, 'mate': None, 'depth': 0}
+        last_info: Dict[str, Any] = {'winrate': None, 'score': None, 'mate': None, 'depth': 0}
         
         def on_search_info(info):
             mpv = getattr(info, 'multipv', 1)
@@ -330,7 +336,7 @@ class EngineService(QObject):
             last_info['winrate'] = winrate
 
         try:
-            result = self.client.nbest_time_limited(
+            result = client.nbest_time_limited(
                 count=1, 
                 time_limit=time_limit, 
                 on_info=on_search_info
@@ -343,17 +349,17 @@ class EngineService(QObject):
         opponent_score = None
         opponent_mate = None
         
-        if result and result.winrate is not None:
+        if result and getattr(result, 'winrate', None) is not None:
             opponent_wr = result.winrate
-            if result.eval:
+            if getattr(result, 'eval', None):
                 opponent_score = result.eval.raw_value
         elif last_info['winrate'] is not None:
-            opponent_wr = last_info['winrate']
+            opponent_wr = float(last_info['winrate'])
             opponent_score = last_info['score']
             opponent_mate = last_info['mate']
                 
         # Invert Perspective (Opponent -> Player)
-        player_wr = 1.0 - opponent_wr
+        player_wr = 1.0 - float(opponent_wr)
         
         player_score = None
         player_mate = None
@@ -391,7 +397,8 @@ class EngineService(QObject):
         Returns: { 'static_eval': int, 'patterns': {'black': [[...]], 'white': [[...]]}, ... }
         """
         import json
-        if not self.client:
+        client = self.client
+        if not client:
             raise RuntimeError("Engine not started")
             
         self._set_state(EngineState.ANALYZING)
@@ -400,12 +407,12 @@ class EngineService(QObject):
             self._setup_board_yx(board.moves)
             
             # Request static JSON
-            self.client.send_raw("YXSTATICJSON")
+            client.send_raw("YXSTATICJSON")
             
             # Read response directly from process stdout
             try:
                 # We expect exactly one line of JSON
-                line = self.client._process.stdout.readline()
+                line = client._process.stdout.readline()
                 if not line:
                     return {}
                     
@@ -423,3 +430,5 @@ class EngineService(QObject):
                 
         finally:
             self._set_state(EngineState.IDLE)
+            
+        return {}

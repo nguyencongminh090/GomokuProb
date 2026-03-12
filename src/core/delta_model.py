@@ -1,8 +1,15 @@
 """
-GomoProb V2: Winrate Delta Model
+GomoProb V2/V4: Winrate Delta Model
 
-Implements the Exponential distribution model for move quality analysis.
-Δ_i = W_best - W_play ~ Exponential(λ)
+Implements the distributional family for move quality analysis.
+Δ_i = W_best - W_play
+
+Supported distributions (Paper Section 3.2):
+- Exponential(λ): Baseline, single parameter
+- Gamma(α, β): Shape-rate generalization, unimodal for α > 1
+- Weibull(k, λ): Tail flexibility, k < 1 heavy-tailed, k > 1 light-tailed
+
+Model selection via AIC/BIC (Paper Section 3.2.4).
 
 Core concepts:
 - λ_human: Expected rate for legitimate players (larger variance, more mistakes)
@@ -12,7 +19,7 @@ Core concepts:
 
 import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 import statistics
 
 
@@ -305,3 +312,241 @@ class SoftmaxChoiceModel:
                 best_tau = tau
         
         return best_tau
+
+    @staticmethod
+    def temperature_score(tau: float) -> float:
+        """
+        Compute temperature score S_τ = 1/τ̂ (Paper Eq. tau_score).
+
+        High S_τ (low temperature) indicates engine-like selection behavior.
+
+        Args:
+            tau: Estimated temperature (> 0)
+
+        Returns:
+            Temperature score (higher = more suspicious)
+        """
+        if tau <= 0:
+            return float('inf')
+        return 1.0 / tau
+
+
+# =============================================================================
+# V4: Gamma Distribution Model (Paper Section 3.2.2)
+# =============================================================================
+
+@dataclass
+class FitResult:
+    """Result of fitting a distribution to data."""
+    distribution: str   # "exponential", "gamma", "weibull"
+    params: dict        # Distribution parameters
+    log_likelihood: float
+    aic: float
+    bic: float
+    ks_statistic: float  # Kolmogorov-Smirnov statistic
+    ks_pvalue: float     # KS test p-value
+
+
+class GammaModel:
+    """
+    Gamma distribution model for winrate deltas (Paper Section 3.2.2).
+
+    f(Δ | α, β) = β^α · Δ^(α-1) · exp(-βΔ) / Γ(α)
+
+    When α=1, reduces to Exponential(β).
+    For α > 1, unimodal with mode at (α-1)/β.
+    """
+
+    @staticmethod
+    def log_pdf(delta: float, alpha: float, beta: float) -> float:
+        """Log-PDF of Gamma(α, β) at delta."""
+        delta = max(delta, 1e-10)
+        return (
+            alpha * math.log(beta)
+            + (alpha - 1) * math.log(delta)
+            - beta * delta
+            - math.lgamma(alpha)
+        )
+
+    @staticmethod
+    def pdf(delta: float, alpha: float, beta: float) -> float:
+        """PDF of Gamma(α, β) at delta."""
+        return math.exp(GammaModel.log_pdf(delta, alpha, beta))
+
+    @staticmethod
+    def log_likelihood(deltas: List[float], alpha: float, beta: float) -> float:
+        """Total log-likelihood of data under Gamma(α, β)."""
+        if not deltas:
+            return 0.0
+        return sum(GammaModel.log_pdf(max(d, 1e-4), alpha, beta) for d in deltas)
+
+    @staticmethod
+    def fit_mle(deltas: List[float]) -> Tuple[float, float]:
+        """
+        Fit Gamma(α, β) via MLE using scipy (Paper Eq. gamma_mle).
+
+        Returns:
+            (alpha, beta) tuple
+        """
+        from scipy.stats import gamma as gamma_dist
+        adjusted = [max(d, 1e-4) for d in deltas]
+        a, _, scale = gamma_dist.fit(adjusted, floc=0)
+        beta = 1.0 / scale  # scipy uses scale = 1/β
+        return (a, beta)
+
+
+class WeibullModel:
+    """
+    Weibull distribution model for winrate deltas (Paper Section 3.2.3).
+
+    f(Δ | k, λ) = (k/λ) · (Δ/λ)^(k-1) · exp(-(Δ/λ)^k)
+
+    k=1: Exponential(1/λ)
+    k<1: Heavier tail (human blunders)
+    k>1: Lighter tail (cheater-like)
+    """
+
+    @staticmethod
+    def log_pdf(delta: float, k: float, lam: float) -> float:
+        """Log-PDF of Weibull(k, λ) at delta."""
+        delta = max(delta, 1e-10)
+        return (
+            math.log(k) - math.log(lam)
+            + (k - 1) * (math.log(delta) - math.log(lam))
+            - (delta / lam) ** k
+        )
+
+    @staticmethod
+    def pdf(delta: float, k: float, lam: float) -> float:
+        """PDF of Weibull(k, λ) at delta."""
+        return math.exp(WeibullModel.log_pdf(delta, k, lam))
+
+    @staticmethod
+    def log_likelihood(deltas: List[float], k: float, lam: float) -> float:
+        """Total log-likelihood of data under Weibull(k, λ)."""
+        if not deltas:
+            return 0.0
+        return sum(WeibullModel.log_pdf(max(d, 1e-4), k, lam) for d in deltas)
+
+    @staticmethod
+    def fit_mle(deltas: List[float]) -> Tuple[float, float]:
+        """
+        Fit Weibull(k, λ) via MLE using scipy.
+
+        Returns:
+            (k, lambda) tuple
+        """
+        from scipy.stats import weibull_min
+        adjusted = [max(d, 1e-4) for d in deltas]
+        c, _, scale = weibull_min.fit(adjusted, floc=0)
+        return (c, scale)
+
+
+# =============================================================================
+# V4: Model Selection (Paper Section 3.2.4)
+# =============================================================================
+
+class ModelSelector:
+    """
+    Select between Exponential, Gamma, and Weibull using AIC/BIC
+    (Paper Eqs. aic, bic) and Kolmogorov-Smirnov goodness-of-fit test.
+    """
+
+    @staticmethod
+    def compute_aic(log_lik: float, n_params: int) -> float:
+        """AIC = 2k - 2·ln(L̂) (Paper Eq. aic)."""
+        return 2 * n_params - 2 * log_lik
+
+    @staticmethod
+    def compute_bic(log_lik: float, n_params: int, n_samples: int) -> float:
+        """BIC = k·ln(n) - 2·ln(L̂) (Paper Eq. bic)."""
+        if n_samples <= 0:
+            return float('inf')
+        return n_params * math.log(n_samples) - 2 * log_lik
+
+    @staticmethod
+    def fit_and_compare(deltas: List[float]) -> List[FitResult]:
+        """
+        Fit Exponential, Gamma, and Weibull to data, returning results
+        sorted from best to worst by BIC.
+
+        Args:
+            deltas: List of winrate delta values (≥ 0)
+
+        Returns:
+            List of FitResult sorted by BIC (best first)
+        """
+        from scipy.stats import (
+            expon as expon_dist,
+            gamma as gamma_dist,
+            weibull_min,
+            kstest,
+        )
+
+        adjusted = [max(d, 1e-4) for d in deltas]
+        n = len(adjusted)
+        if n < 3:
+            return []
+
+        results = []
+
+        # --- Exponential ---
+        try:
+            mean_d = statistics.mean(adjusted)
+            lam = 1.0 / mean_d
+            ll = sum(math.log(lam) - lam * d for d in adjusted)
+            aic = ModelSelector.compute_aic(ll, 1)
+            bic = ModelSelector.compute_bic(ll, 1, n)
+            ks_stat, ks_p = kstest(adjusted, 'expon', args=(0, mean_d))
+            results.append(FitResult(
+                distribution="exponential",
+                params={"lambda": lam},
+                log_likelihood=ll, aic=aic, bic=bic,
+                ks_statistic=ks_stat, ks_pvalue=ks_p,
+            ))
+        except Exception:
+            pass
+
+        # --- Gamma ---
+        try:
+            a, _, scale = gamma_dist.fit(adjusted, floc=0)
+            beta = 1.0 / scale
+            ll = GammaModel.log_likelihood(adjusted, a, beta)
+            aic = ModelSelector.compute_aic(ll, 2)
+            bic = ModelSelector.compute_bic(ll, 2, n)
+            ks_stat, ks_p = kstest(adjusted, 'gamma', args=(a, 0, scale))
+            results.append(FitResult(
+                distribution="gamma",
+                params={"alpha": a, "beta": beta},
+                log_likelihood=ll, aic=aic, bic=bic,
+                ks_statistic=ks_stat, ks_pvalue=ks_p,
+            ))
+        except Exception:
+            pass
+
+        # --- Weibull ---
+        try:
+            c, _, scale = weibull_min.fit(adjusted, floc=0)
+            ll = WeibullModel.log_likelihood(adjusted, c, scale)
+            aic = ModelSelector.compute_aic(ll, 2)
+            bic = ModelSelector.compute_bic(ll, 2, n)
+            ks_stat, ks_p = kstest(adjusted, 'weibull_min', args=(c, 0, scale))
+            results.append(FitResult(
+                distribution="weibull",
+                params={"k": c, "lambda": scale},
+                log_likelihood=ll, aic=aic, bic=bic,
+                ks_statistic=ks_stat, ks_pvalue=ks_p,
+            ))
+        except Exception:
+            pass
+
+        # Sort by BIC (lower is better)
+        results.sort(key=lambda r: r.bic)
+        return results
+
+    @staticmethod
+    def best_model(deltas: List[float]) -> Optional[FitResult]:
+        """Return the best model by BIC, or None if fitting fails."""
+        results = ModelSelector.fit_and_compare(deltas)
+        return results[0] if results else None
+

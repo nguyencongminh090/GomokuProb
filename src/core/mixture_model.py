@@ -113,6 +113,97 @@ class MixtureModel:
         """
         return alpha * self.log_pdf(delta)
 
+    def fit_em(
+        self,
+        deltas: List[float],
+        max_iter: int = 100,
+        tol: float = 1e-6,
+    ) -> Tuple[float, float, float]:
+        """
+        Fit mixture parameters via Expectation-Maximization (Paper Section 3.3).
+
+        E-step: Compute responsibilities γ_{i,1} and γ_{i,2}  (Paper Eq. e_step)
+        M-step: Update π, λ_good, λ_blunder                   (Paper Eqs. m_step_pi, m_step_lambda)
+
+        This modifies self.pi, self.lambda_good, self.lambda_blunder in-place
+        and returns the fitted parameters.
+
+        Args:
+            deltas: Observed winrate delta values
+            max_iter: Maximum EM iterations
+            tol: Convergence tolerance for log-likelihood change
+
+        Returns:
+            Tuple of (pi, lambda_good, lambda_blunder) after convergence
+        """
+        if len(deltas) < 5:
+            return (self.pi, self.lambda_good, self.lambda_blunder)
+
+        adjusted = [max(d, 1e-4) for d in deltas]
+        n = len(adjusted)
+
+        # Initialize from current parameters
+        pi = self.pi
+        lam_g = self.lambda_good
+        lam_b = self.lambda_blunder
+
+        prev_ll = float('-inf')
+
+        for iteration in range(max_iter):
+            # --- E-step: compute responsibilities ---
+            gamma_good = []
+            for d in adjusted:
+                log_comp_g = math.log(pi) + math.log(lam_g) - lam_g * d
+                log_comp_b = math.log(1 - pi) + math.log(lam_b) - lam_b * d
+                max_log = max(log_comp_g, log_comp_b)
+                # Normalize in log space
+                resp_g = math.exp(log_comp_g - max_log)
+                resp_b = math.exp(log_comp_b - max_log)
+                total = resp_g + resp_b
+                gamma_good.append(resp_g / total if total > 0 else 0.5)
+
+            # --- M-step: update parameters ---
+            sum_gamma_g = sum(gamma_good)
+            sum_gamma_b = n - sum_gamma_g
+
+            # Prevent degenerate components
+            if sum_gamma_g < 1e-6 or sum_gamma_b < 1e-6:
+                break
+
+            pi = sum_gamma_g / n
+
+            weighted_sum_g = sum(g * d for g, d in zip(gamma_good, adjusted))
+            weighted_sum_b = sum((1 - g) * d for g, d in zip(gamma_good, adjusted))
+
+            lam_g = sum_gamma_g / weighted_sum_g if weighted_sum_g > 0 else lam_g
+            lam_b = sum_gamma_b / weighted_sum_b if weighted_sum_b > 0 else lam_b
+
+            # Ensure lambda_good > lambda_blunder (good component is tighter)
+            if lam_g < lam_b:
+                lam_g, lam_b = lam_b, lam_g
+                pi = 1.0 - pi
+
+            # Compute log-likelihood for convergence check
+            ll = 0.0
+            for d in adjusted:
+                comp_g = pi * lam_g * math.exp(-lam_g * d)
+                comp_b = (1 - pi) * lam_b * math.exp(-lam_b * d)
+                ll += math.log(max(comp_g + comp_b, 1e-300))
+
+            if abs(ll - prev_ll) < tol:
+                break
+            prev_ll = ll
+
+        # Clamp pi to valid range
+        pi = max(0.01, min(0.99, pi))
+
+        # Update self
+        self.pi = pi
+        self.lambda_good = lam_g
+        self.lambda_blunder = lam_b
+
+        return (pi, lam_g, lam_b)
+
 
 def log_likelihood_exponential(delta: float, lambda_val: float) -> float:
     """

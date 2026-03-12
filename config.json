@@ -6,11 +6,16 @@
     "start_move": 5,
     "analyze_side": "black",
     "prior_cheat": 0.01,
-    "lambda_human": 10.0,
+    "lambda_human": 50.0,
     "lambda_cheater": 70.0,
     "threshold_suspicious": 0.5,
     "threshold_cheater": 0.8,
     "near_optimal_threshold": 0.015,
     "temporal_window_size": 10,
-    "switch_detection_threshold": 0.1
+    "switch_detection_threshold": 0.1,
+    "mixture_pi": 0.75,
+    "mixture_lambda_good": 20.0,
+    "mixture_lambda_blunder": 3.0,
+    "enable_model_selection": true,
+    "enable_em_fitting": true
 }

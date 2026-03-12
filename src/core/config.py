@@ -30,6 +30,15 @@ class AnalysisConfig:
     temporal_window_size: int = 5       # Moving average window
     switch_detection_threshold: float = 0.1  # Min Δ change to detect switch
     
+    # V4: Mixture Model Parameters (Paper Section 3.3)
+    mixture_pi: float = 0.75            # Weight of "good play" component
+    mixture_lambda_good: float = 20.0   # Rate for good plays
+    mixture_lambda_blunder: float = 3.0 # Rate for blunders
+    
+    # V4: Analysis Options
+    enable_model_selection: bool = True  # Run Gamma/Weibull comparison (AIC/BIC)
+    enable_em_fitting: bool = True       # Fit mixture parameters via EM
+    
     @property
     def rule_name(self) -> str:
         rules = {0: "Freestyle", 1: "Standard", 4: "Renju"}

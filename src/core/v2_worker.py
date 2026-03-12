@@ -13,7 +13,10 @@ from src.core.config import AnalysisConfig
 from src.services.engine_service import EngineService, MoveEvaluation
 
 # V2 Imports
-from src.core.delta_model import DeltaModel, MoveAnalysis, GameAnalysis, SoftmaxChoiceModel
+from src.core.delta_model import (
+    DeltaModel, MoveAnalysis, GameAnalysis, SoftmaxChoiceModel,
+    ModelSelector, FitResult,
+)
 from src.core.player_model import BayesianPlayerModel, PlayerClassification
 from src.core.temporal_model import TemporalModel, TemporalAnalysis
 from src.core.feature_extractor import FeatureExtractor, FeatureVector
@@ -75,6 +78,19 @@ class V2GameResult:
     # V3 Statistics
     pattern_stats: str = ""
     temperature_mle: float = 0.1  # Softmax temperature estimate
+    
+    # V4 Statistics (Paper alignment)
+    temperature_score: float = 0.0     # S_τ = 1/τ̂
+    log_likelihood_ratio: float = 0.0  # log Λ = L₁ - L₀
+    
+    # V4: Distribution model comparison (Paper Section 3.2.4)
+    distribution_fits: List = field(default_factory=list)  # List[FitResult]
+    best_distribution: str = "exponential"  # Best model by BIC
+    
+    # V4: EM-fitted mixture parameters (Paper Section 3.3)
+    em_pi: float = 0.0
+    em_lambda_good: float = 0.0
+    em_lambda_blunder: float = 0.0
 
 
 class V2AnalysisWorker(QObject):
@@ -116,7 +132,11 @@ class V2AnalysisWorker(QObject):
             lambda_human=config.lambda_human,
             lambda_cheater=config.lambda_cheater,
             threshold_suspicious=config.threshold_suspicious,
-            threshold_cheater=config.threshold_cheater
+            threshold_cheater=config.threshold_cheater,
+            # V4: Mixture model from config
+            mixture_pi=config.mixture_pi,
+            mixture_lambda_good=config.mixture_lambda_good,
+            mixture_lambda_blunder=config.mixture_lambda_blunder,
         )
         
         self.temporal_model = TemporalModel(
@@ -396,6 +416,48 @@ class V2AnalysisWorker(QObject):
         if softmax_observations:
             temperature_mle = self.softmax_model.estimate_temperature(softmax_observations)
         
+        # V4: Compute temperature score S_τ = 1/τ̂ (Paper Eq. tau_score)
+        temp_score = SoftmaxChoiceModel.temperature_score(temperature_mle)
+        
+        # V4: Compute Likelihood Ratio Test (Paper Section 5.5)
+        deltas_lrt = [m.delta for m in move_analyses]
+        log_lambda, _, _ = self.player_model.compute_lrt(deltas_lrt)
+        
+        # V4: Compute prior sensitivity analysis (Paper Section 5.6)
+        sensitivity = self.player_model.sensitivity_analysis(deltas_lrt)
+        
+        # Store V4 metrics in classification
+        classification.log_likelihood_ratio = log_lambda
+        classification.temperature_score = temp_score
+        classification.sensitivity_results = sensitivity
+        
+        # V4: Distribution model comparison (Paper Section 3.2.4)
+        # Fit Exponential, Gamma, Weibull and select best by BIC
+        dist_fits = []
+        best_dist_name = "exponential"
+        if self.config.enable_model_selection and len(deltas_lrt) >= 5:
+            try:
+                dist_fits = ModelSelector.fit_and_compare(deltas_lrt)
+                if dist_fits:
+                    best_dist_name = dist_fits[0].distribution
+            except Exception:
+                pass
+        
+        # V4: EM-fitted mixture parameters (Paper Section 3.3)
+        # Fit mixture model from actual game data
+        from src.core.mixture_model import MixtureModel as MixtureFitter
+        em_pi, em_lg, em_lb = 0.0, 0.0, 0.0
+        if self.config.enable_em_fitting and len(deltas_lrt) >= 10:
+            try:
+                fitter = MixtureFitter(
+                    pi=self.player_model.mixture_model.pi,
+                    lambda_good=self.player_model.mixture_model.lambda_good,
+                    lambda_blunder=self.player_model.mixture_model.lambda_blunder,
+                )
+                em_pi, em_lg, em_lb = fitter.fit_em(deltas_lrt)
+            except Exception:
+                pass
+        
         # Temporal analysis
         deltas = [m.delta for m in move_analyses]
         temporal = self.temporal_model.analyze(deltas)
@@ -414,7 +476,14 @@ class V2AnalysisWorker(QObject):
             total_moves=len(self.board.moves),
             analyzed_moves=len(move_analyses),
             pattern_stats=self.pattern_analyzer.get_summary(),
-            temperature_mle=temperature_mle
+            temperature_mle=temperature_mle,
+            temperature_score=temp_score,
+            log_likelihood_ratio=log_lambda,
+            distribution_fits=dist_fits,
+            best_distribution=best_dist_name,
+            em_pi=em_pi,
+            em_lambda_good=em_lg,
+            em_lambda_blunder=em_lb,
         )
         
         # Log final results
@@ -430,6 +499,32 @@ class V2AnalysisWorker(QObject):
         self.engine._log("STAGE", f"  CLASSIFICATION: {classification.classification}")
         self.engine._log("STAGE", f"  Confidence: {classification.confidence*100:.1f}%")
         self.engine._log("STAGE", f"  Softmax τ (MLE): {temperature_mle:.4f}")
+        self.engine._log("STAGE", f"  Temperature Score S_τ: {temp_score:.2f}")
+        self.engine._log("STAGE", f"  Log LR (Λ): {log_lambda:.2f}")
+        
+        # Log sensitivity analysis
+        if sensitivity:
+            sens_str = " | ".join(f"P(H1)={p:.3f}→{post*100:.1f}%" for p, post in sensitivity.items())
+            self.engine._log("STAGE", f"  Sensitivity: {sens_str}")
+        
+        # V4: Log distribution model comparison
+        if dist_fits:
+            self.engine._log("STAGE", f"  --- Distribution Model Comparison ---")
+            self.engine._log("STAGE", f"  Best Model (BIC): {best_dist_name.upper()}")
+            for fit in dist_fits:
+                ks_status = '✓' if fit.ks_pvalue > 0.05 else '✗'
+                self.engine._log("STAGE",
+                    f"    {fit.distribution:12s} | AIC={fit.aic:.1f} | BIC={fit.bic:.1f}"
+                    f" | KS p={fit.ks_pvalue:.3f} {ks_status}"
+                    f" | params={fit.params}"
+                )
+        
+        # V4: Log EM-fitted mixture parameters
+        if em_pi > 0:
+            self.engine._log("STAGE", f"  --- EM-Fitted Mixture Parameters ---")
+            self.engine._log("STAGE", f"    π={em_pi:.3f} (default={self.player_model.mixture_model.pi:.3f})")
+            self.engine._log("STAGE", f"    λ_good={em_lg:.2f} (default={self.player_model.mixture_model.lambda_good:.2f})")
+            self.engine._log("STAGE", f"    λ_blunder={em_lb:.2f} (default={self.player_model.mixture_model.lambda_blunder:.2f})")
         
         if temporal.is_suspicious:
             self.engine._log("STAGE", f"  ⚠️ SUSPICIOUS: Switch-point detected!")

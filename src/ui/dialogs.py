@@ -5,7 +5,7 @@ Dialogs for Gomoku Accuracy Tool.
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, 
                              QPlainTextEdit, QDialogButtonBox, QFormLayout,
                              QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, 
-                             QPushButton, QFileDialog)
+                             QPushButton, QFileDialog, QCheckBox)
 from PyQt6.QtCore import Qt
 from src.core.config import AnalysisConfig
 
@@ -172,6 +172,51 @@ class SettingsDialog(QDialog):
         self.spin_switch_threshold.setToolTip("Minimum Δ change to detect playstyle switch")
         layout.addRow("Switch Detection Δ:", self.spin_switch_threshold)
         
+        # === V4 Mixture Model Section ===
+        layout.addRow(QLabel(""))  # Spacer
+        layout.addRow(QLabel("<b>V4 Mixture Model</b>"))
+        
+        # Pi (mixing weight)
+        self.spin_mixture_pi = QDoubleSpinBox()
+        self.spin_mixture_pi.setRange(10.0, 95.0)
+        self.spin_mixture_pi.setSingleStep(5.0)
+        self.spin_mixture_pi.setSuffix(" %")
+        self.spin_mixture_pi.setValue(self.config.mixture_pi * 100)
+        self.spin_mixture_pi.setToolTip("Weight of 'good play' component in mixture model")
+        layout.addRow("π (Good Play %):", self.spin_mixture_pi)
+        
+        # Lambda Good
+        self.spin_lambda_good = QDoubleSpinBox()
+        self.spin_lambda_good.setRange(5.0, 100.0)
+        self.spin_lambda_good.setSingleStep(1.0)
+        self.spin_lambda_good.setValue(self.config.mixture_lambda_good)
+        self.spin_lambda_good.setToolTip("Rate parameter for good plays (higher = tighter around 0)")
+        layout.addRow("λ Good:", self.spin_lambda_good)
+        
+        # Lambda Blunder
+        self.spin_lambda_blunder = QDoubleSpinBox()
+        self.spin_lambda_blunder.setRange(0.5, 20.0)
+        self.spin_lambda_blunder.setSingleStep(0.5)
+        self.spin_lambda_blunder.setValue(self.config.mixture_lambda_blunder)
+        self.spin_lambda_blunder.setToolTip("Rate parameter for blunders (lower = heavier tail)")
+        layout.addRow("λ Blunder:", self.spin_lambda_blunder)
+        
+        # === V4 Analysis Options Section ===
+        layout.addRow(QLabel(""))  # Spacer
+        layout.addRow(QLabel("<b>V4 Analysis Options</b>"))
+        
+        # Enable Model Selection
+        self.chk_model_selection = QCheckBox("Compare Exponential / Gamma / Weibull (AIC/BIC)")
+        self.chk_model_selection.setChecked(self.config.enable_model_selection)
+        self.chk_model_selection.setToolTip("Fit and compare distribution families after analysis")
+        layout.addRow("Model Selection:", self.chk_model_selection)
+        
+        # Enable EM Fitting
+        self.chk_em_fitting = QCheckBox("Fit mixture parameters via EM algorithm")
+        self.chk_em_fitting.setChecked(self.config.enable_em_fitting)
+        self.chk_em_fitting.setToolTip("Estimate optimal π, λ_good, λ_blunder from game data")
+        layout.addRow("EM Fitting:", self.chk_em_fitting)
+        
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | 
                                    QDialogButtonBox.StandardButton.Cancel)
@@ -200,5 +245,12 @@ class SettingsDialog(QDialog):
             threshold_cheater=self.spin_threshold_cheat.value() / 100.0,
             near_optimal_threshold=self.spin_near_optimal.value() / 100.0,
             temporal_window_size=self.spin_temporal_window.value(),
-            switch_detection_threshold=self.spin_switch_threshold.value() / 100.0
+            switch_detection_threshold=self.spin_switch_threshold.value() / 100.0,
+            # V4 Mixture Model
+            mixture_pi=self.spin_mixture_pi.value() / 100.0,
+            mixture_lambda_good=self.spin_lambda_good.value(),
+            mixture_lambda_blunder=self.spin_lambda_blunder.value(),
+            # V4 Analysis Options
+            enable_model_selection=self.chk_model_selection.isChecked(),
+            enable_em_fitting=self.chk_em_fitting.isChecked(),
         )

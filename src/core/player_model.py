@@ -1,5 +1,5 @@
 """
-GomoProb V3: Bayesian Player Model
+GomoProb V3/V4: Bayesian Player Model
 
 Implements the Bayesian framework for anti-cheating detection.
 P(Cheat | D) ∝ P(D | Cheat) × P(Cheat)
@@ -8,11 +8,16 @@ V3 Changes:
 - Uses MixtureModel for human likelihood (2-component Exponential)
 - Uses tempered likelihood for complexity weighting (replaces linear interpolation)
 - Online update is the single authoritative pathway
+
+V4 Changes:
+- Formal Likelihood Ratio Test (Neyman-Pearson, Paper Section 5.5)
+- Prior sensitivity analysis (Paper Section 5.6)
+- Temperature score integration
 """
 
 import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 from src.core.delta_model import DeltaModel, MoveAnalysis, GameAnalysis
 from src.core.mixture_model import (
@@ -38,6 +43,15 @@ class PlayerClassification:
     # Thresholds used
     threshold_suspicious: float
     threshold_cheater: float
+    
+    # V4: Formal hypothesis testing (Paper Section 5.5)
+    log_likelihood_ratio: float = 0.0  # log Λ = L1 - L0
+    
+    # V4: Boltzmann temperature score (Paper Eq. tau_score)
+    temperature_score: float = 0.0     # S_τ = 1/τ̂
+    
+    # V4: Sensitivity analysis results (Paper Section 5.6)
+    sensitivity_results: Optional[Dict[float, float]] = None  # prior → posterior
 
 
 class BayesianPlayerModel:
@@ -217,3 +231,89 @@ class BayesianPlayerModel:
         
         new_posterior = exp_cheat / total
         return new_posterior
+
+    def compute_lrt(self, deltas: List[float]) -> Tuple[float, float, float]:
+        """
+        Compute the Likelihood Ratio Test statistic (Paper Section 5.5).
+
+        Λ = P(D | H₁) / P(D | H₀) = exp(L₁ - L₀)  (Paper Eq. lrt)
+
+        By the Neyman-Pearson lemma, rejecting H₀ when Λ > η is the most
+        powerful test at any given significance level α.
+
+        Args:
+            deltas: List of winrate delta values
+
+        Returns:
+            Tuple of (log_lambda, log_lik_human, log_lik_cheater)
+            where log_lambda = L₁ - L₀
+        """
+        if not deltas:
+            return (0.0, 0.0, 0.0)
+
+        log_lik_human = self.mixture_model.log_likelihood(deltas)
+        log_lik_cheater = self.delta_model.log_likelihood_cheater(
+            deltas, self.lambda_cheater
+        )
+
+        log_lambda = log_lik_cheater - log_lik_human
+        return (log_lambda, log_lik_human, log_lik_cheater)
+
+    @staticmethod
+    def lrt_reject(log_lambda: float, log_eta: float) -> bool:
+        """
+        Determine whether the LRT rejects H₀ (Paper Eq. lrt_log).
+
+        Args:
+            log_lambda: Log likelihood ratio (L₁ - L₀)
+            log_eta: Log critical value (calibrated for desired α)
+
+        Returns:
+            True if the test rejects H₀ (evidence of cheating)
+        """
+        return log_lambda > log_eta
+
+    def sensitivity_analysis(
+        self,
+        deltas: List[float],
+        priors: Optional[List[float]] = None,
+    ) -> Dict[float, float]:
+        """
+        Compute posterior under different prior assumptions (Paper Section 5.6).
+
+        This helps determine whether the classification is robust to the
+        choice of prior P(H₁). If the posterior exceeds the cheater threshold
+        for all reasonable priors, the evidence is compelling.
+
+        Args:
+            deltas: List of winrate delta values
+            priors: List of prior values to test (default: [0.001, 0.01, 0.05, 0.10])
+
+        Returns:
+            Dict mapping prior → posterior P(H₁ | D)
+        """
+        if priors is None:
+            priors = [0.001, 0.01, 0.05, 0.10]
+
+        if not deltas:
+            return {p: p for p in priors}
+
+        # Compute likelihoods once
+        log_lik_human = self.mixture_model.log_likelihood(deltas)
+        log_lik_cheater = self.delta_model.log_likelihood_cheater(
+            deltas, self.lambda_cheater
+        )
+
+        results = {}
+        for prior in priors:
+            log_post_cheat = log_lik_cheater + math.log(max(prior, 1e-15))
+            log_post_human = log_lik_human + math.log(max(1.0 - prior, 1e-15))
+
+            max_log = max(log_post_cheat, log_post_human)
+            exp_cheat = math.exp(log_post_cheat - max_log)
+            exp_human = math.exp(log_post_human - max_log)
+            total = exp_cheat + exp_human
+
+            results[prior] = exp_cheat / total if total > 0 else prior
+
+        return results

@@ -1,0 +1,14 @@
+{
+  "source_directories": [
+    "src",
+    "tests"
+  ],
+  "search_path": [
+    "lib/PyGomo/src",
+    "/home/ngmint/.local/lib/python3.13/site-packages",
+    "/usr/local/lib/python3.13/dist-packages",
+    "/usr/lib/python3/dist-packages",
+    "/usr/lib/python3.13/dist-packages",
+    "/usr/lib/python3.13"
+  ]
+}
