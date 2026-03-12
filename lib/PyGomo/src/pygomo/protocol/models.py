@@ -44,8 +44,12 @@ class Move:
                 self.row = int(parts[1])
             else:
                 # Algebraic format: "h8"
-                self.col = ord(move[0].lower()) - ord('a')
-                self.row = int(move[1:]) - 1
+                # Rapfi (coord_conversion_mode=none) uses row 1 at TOP, 1-indexed.
+                # So "f11" means col=5, row=10 (0-indexed from top).
+                col_part = move[0:1]
+                row_part = move[1:]
+                self.col = ord(col_part.lower()) - ord('a')
+                self.row = int(row_part) - 1  # Top-Left 0-indexed: row 1 = index 0
         else:
             raise ValueError(f"Invalid move format: {move}")
     
@@ -58,8 +62,10 @@ class Move:
         return f"{self.col},{self.row}"
     
     def to_algebraic(self) -> str:
-        """Return as algebraic notation 'a1' style."""
-        return f"{chr(ord('a') + self.col)}{self.row + 1}"
+        """Return as algebraic notation matching Rapfi convention."""
+        # Rapfi (coord_conversion_mode=none): row index 0 = row '1' at TOP.
+        row_num = self.row + 1
+        return f"{chr(ord('a') + self.col)}{row_num}"
     
     def __str__(self) -> str:
         return self.to_algebraic()
@@ -134,8 +140,11 @@ class Evaluate:
         
         # Standard sigmoid conversion
         try:
-            return 1.0 / (1.0 + math.exp(-float(score) / sf))
-        except (OverflowError, ValueError):
+            score_val = score.score() if isinstance(score, Evaluate) else score
+            if isinstance(score_val, MateScore):
+                return self.winrate(sf) # Recursive call will handle MateScore branch
+            return 1.0 / (1.0 + math.exp(-float(score_val) / sf))
+        except (OverflowError, ValueError, TypeError):
             return 0.5
     
     def winrate_percent(self, scaling_factor: Optional[float] = None) -> float:
@@ -203,7 +212,8 @@ class SearchInfo:
         return self.eval.winrate_percent()
     
     def __str__(self) -> str:
-        pv_str = " ".join(str(m) for m in self.pv[:5])
+        pv_slice = self.pv[0:5]
+        pv_str = " ".join(str(m) for m in pv_slice)
         return (
             f"depth {self.depth}-{self.sel_depth} "
             f"eval {self.eval.raw_value} "
@@ -226,21 +236,25 @@ class PlayResult:
     @property
     def eval(self) -> Optional[Evaluate]:
         """Get evaluation from search info."""
-        return self.search_info.eval if self.search_info else None
+        si = self.search_info
+        return si.eval if si is not None else None
     
     @property
     def winrate(self) -> Optional[float]:
         """Get winrate from search info."""
-        return self.search_info.winrate if self.search_info else None
+        si = self.search_info
+        return si.winrate if si is not None else None
     
     @property
     def pv(self) -> list[Move]:
         """Get principal variation."""
-        return self.search_info.pv if self.search_info else []
+        si = self.search_info
+        return si.pv if si is not None else []
     
     def __str__(self) -> str:
-        if self.search_info:
-            return f"PlayResult({self.move}, eval={self.search_info.eval.raw_value})"
+        si = self.search_info
+        if si is not None:
+            return f"PlayResult({self.move}, eval={si.eval.raw_value})"
         return f"PlayResult({self.move})"
 
 

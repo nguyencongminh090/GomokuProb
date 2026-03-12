@@ -7,17 +7,34 @@ import os
 import sys
 from typing import List, Optional
 
-# Add PyGomo to path
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PYGOMO_PATH = os.path.join(PROJECT_ROOT, "lib", "PyGomo", "src")
-if PYGOMO_PATH not in sys.path:
-    sys.path.insert(0, PYGOMO_PATH)
+# # Add PyGomo to path
+# PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# PYGOMO_PATH = os.path.join(PROJECT_ROOT, "lib", "PyGomo", "src")
+# if PYGOMO_PATH not in sys.path:
+#     sys.path.insert(0, PYGOMO_PATH)
 
 from PyQt6.QtCore import QObject, pyqtSignal
 from pygomo import EngineClient, BoardPosition, Move as PyGomoMove, SearchInfo
 from src.core.board import BoardState, Move
 from src.core.math_prob import MoveEvaluation
 from src.core.state import EngineState
+
+
+def _engine_to_human_notation(engine_algebraic: str, board_size: int = 15) -> str:
+    """Convert engine algebraic (row 1=Top) to human Renju notation (row 1=Bottom).
+    
+    Engine 'f11' means col=5, row_from_top=11 → internal y=10.
+    Human notation for y=10: row_from_bottom = 15-10 = 5 → 'f5'.
+    """
+    import re
+    m = re.match(r'([a-o])(\d{1,2})', engine_algebraic.lower())
+    if not m:
+        return engine_algebraic  # Can't parse, return as-is
+    col_char = m.group(1)
+    engine_row = int(m.group(2))  # 1-indexed from top
+    internal_y = engine_row - 1
+    human_row = board_size - internal_y  # 1-indexed from bottom
+    return f"{col_char}{human_row}"
 
 class EngineService(QObject):
     """
@@ -200,42 +217,24 @@ class EngineService(QObject):
             self._log("INFO", "NBEST returned None")
             return candidates
 
-        def get_wr_from_info(info):
-            if hasattr(info, 'winrate') and info.winrate is not None and abs(info.winrate) > 0.001:
-                return info.winrate
-            if hasattr(info, 'eval') and hasattr(info.eval, 'raw_value'):
-                val = info.eval.raw_value
-                if isinstance(val, str):
-                    val_str = val.upper()
-                    if val_str.startswith("M") or val_str.startswith("+M"):
-                        return 1.0
-                    if val_str.startswith("-M"):
-                        return 0.0
-                try:
-                    score_val = float(val)
-                    import math
-                    return 1.0 / (1.0 + math.exp(-score_val / 200.0))
-                except:
-                    pass
-            return 0.5
-
         # Build candidates from all_info
         multipv_map = {}
         if hasattr(result, 'all_info') and result.all_info:
             self._log("STAGE", f"DEBUG: all_info has {len(result.all_info)} entries")
-            mpv_counts = {}
             for info in result.all_info:
                 mpv = getattr(info, 'multipv', 1)
-                mpv_counts[mpv] = mpv_counts.get(mpv, 0) + 1
                 multipv_map[mpv] = info
-            self._log("STAGE", f"DEBUG: multipv distribution = {mpv_counts}")
-        else:
-            self._log("STAGE", "DEBUG: all_info is empty or missing")
+        elif hasattr(result, 'search_info') and result.search_info:
+            multipv_map[1] = result.search_info
         
         for mpv_idx in sorted(multipv_map.keys()):
             info = multipv_map[mpv_idx]
-            move_str = info.pv[0].to_algebraic() if info.pv else f"pv{mpv_idx}"
-            wr = get_wr_from_info(info)
+            move_obj = info.pv[0] if info.pv else None
+            engine_str = move_obj.to_algebraic() if move_obj else f"pv{mpv_idx}"
+            move_str = _engine_to_human_notation(engine_str) if move_obj else engine_str
+            
+            # Use PyGomo's winrate logic
+            wr = info.winrate if hasattr(info, 'winrate') else 0.5
             is_best = (mpv_idx == 1)
             
             raw_score = None
@@ -275,9 +274,10 @@ class EngineService(QObject):
             self._log("STAGE", f"DEBUG Candidate {move_str}: Depth={depth_val} N={nodes_val}")
         
         if not candidates:
-            wr = get_wr_from_info(result.search_info) if result.search_info else 0.5
+            # Result itself has winrate in PlayResult
+            wr = result.winrate if result.winrate is not None else 0.5
             candidates.append(MoveEvaluation(
-                move_notation=str(result.move) if result.move else "???",
+                move_notation=_engine_to_human_notation(str(result.move)) if result.move else "???",
                 winrate=wr,
                 is_best=True
             ))
@@ -343,25 +343,14 @@ class EngineService(QObject):
         opponent_score = None
         opponent_mate = None
         
-        if result:
-            if hasattr(result, 'winrate') and result.winrate is not None:
-                opponent_wr = result.winrate
-            elif last_info['winrate'] is not None:
-                opponent_wr = last_info['winrate']
-                
-            if hasattr(result, 'score') and result.score is not None:
-                opponent_score = result.score
-            elif hasattr(result, 'eval') and hasattr(result.eval, 'raw_value'):
+        if result and result.winrate is not None:
+            opponent_wr = result.winrate
+            if result.eval:
                 opponent_score = result.eval.raw_value
-            elif last_info['score'] is not None:
-                opponent_score = last_info['score']
-        else:
-            if last_info['winrate'] is not None:
-                opponent_wr = last_info['winrate']
-            if last_info['score'] is not None:
-                opponent_score = last_info['score']
-            if last_info['mate'] is not None:
-                opponent_mate = last_info['mate']
+        elif last_info['winrate'] is not None:
+            opponent_wr = last_info['winrate']
+            opponent_score = last_info['score']
+            opponent_mate = last_info['mate']
                 
         # Invert Perspective (Opponent -> Player)
         player_wr = 1.0 - opponent_wr

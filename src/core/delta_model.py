@@ -183,3 +183,125 @@ class DeltaModel:
             log_lik += math.log(lambda_cheater) - lambda_cheater * d_adj
         
         return log_lik
+
+
+class SoftmaxChoiceModel:
+    """
+    Models player move selection using softmax (Boltzmann) distribution.
+    
+    P(choosing move_i | candidates, τ) = exp(W_i / τ) / Σ exp(W_j / τ)
+    
+    Where:
+    - W_i = winrate of move i
+    - τ = temperature parameter
+    - Low τ → always picks best move (engine-like, suspicious)
+    - High τ → more uniform/random choice (human-like)
+    
+    The temperature τ can be estimated via MLE from observed games.
+    """
+    
+    def __init__(self):
+        pass
+    
+    @staticmethod
+    def softmax_probs(winrates: List[float], temperature: float) -> List[float]:
+        """
+        Compute softmax probabilities for candidate moves.
+        
+        Args:
+            winrates: Winrates of each candidate move
+            temperature: τ parameter (> 0)
+            
+        Returns:
+            List of probabilities (sum to 1.0)
+        """
+        if not winrates or temperature <= 0:
+            n = len(winrates) if winrates else 1
+            return [1.0 / n] * n
+        
+        # Scale by temperature
+        scaled = [w / temperature for w in winrates]
+        
+        # log-sum-exp for stability
+        max_val = max(scaled)
+        exps = [math.exp(s - max_val) for s in scaled]
+        total = sum(exps)
+        
+        return [e / total for e in exps]
+    
+    @staticmethod
+    def log_prob_of_choice(
+        winrates: List[float],
+        chosen_index: int,
+        temperature: float
+    ) -> float:
+        """
+        Log-probability that the player chose the move at chosen_index.
+        
+        log P(choice | τ) = W_chosen/τ - log(Σ exp(W_j/τ))
+        
+        Args:
+            winrates: Winrates of all candidates
+            chosen_index: Index of the actually played move (0-indexed)
+            temperature: τ parameter
+            
+        Returns:
+            Log-probability (always ≤ 0)
+        """
+        if not winrates or chosen_index < 0 or chosen_index >= len(winrates):
+            return 0.0
+        if temperature <= 0:
+            return 0.0
+        
+        scaled = [w / temperature for w in winrates]
+        max_val = max(scaled)
+        
+        # log P = scaled[chosen] - log(Σ exp(scaled))
+        # = scaled[chosen] - max_val - log(Σ exp(scaled - max_val))
+        log_sum_exp = max_val + math.log(
+            sum(math.exp(s - max_val) for s in scaled)
+        )
+        
+        return scaled[chosen_index] - log_sum_exp
+    
+    @staticmethod
+    def estimate_temperature(
+        observations: List[Tuple[List[float], int]],
+        temp_range: Tuple[float, float] = (0.005, 0.5),
+        steps: int = 50
+    ) -> float:
+        """
+        Estimate optimal temperature via grid search MLE.
+        
+        Finds τ that maximizes Σ log P(choice_i | candidates_i, τ).
+        
+        Args:
+            observations: List of (candidate_winrates, chosen_index) tuples
+            temp_range: (min_τ, max_τ) search range
+            steps: Number of grid search steps
+            
+        Returns:
+            Estimated τ (lower = more engine-like)
+        """
+        if not observations:
+            return 0.1  # Default
+        
+        best_tau = temp_range[0]
+        best_ll = float('-inf')
+        
+        tau_min, tau_max = temp_range
+        
+        for i in range(steps):
+            tau = tau_min + (tau_max - tau_min) * i / (steps - 1)
+            
+            total_ll = 0.0
+            for winrates, chosen_idx in observations:
+                total_ll += SoftmaxChoiceModel.log_prob_of_choice(
+                    winrates, chosen_idx, tau
+                )
+            
+            if total_ll > best_ll:
+                best_ll = total_ll
+                best_tau = tau
+        
+        return best_tau

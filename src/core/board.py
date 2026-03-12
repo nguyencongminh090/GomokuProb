@@ -23,25 +23,18 @@ class Move:
     def __str__(self):
         return f"{self.notation} ({'Black' if self.color == 1 else 'White'})"
 
-    def to_algebraic(self) -> str:
+    def to_algebraic(self, size: int = 15) -> str:
         """Return algebraic notation (e.g. h8)."""
         if self.notation:
             return self.notation
         
-        # Convert coordinate to algebraic
-        # x=7 -> h
+        # Convert coordinate to algebraic (Top-Left 0,0 origin)
+        # x=0 -> a
         col_char = chr(ord('a') + self.x)
-        row_num = self.size - self.y # Assuming 0,0 is top-left
-        # Actually board size is needed for y calculation if notation is missing.
-        # But this Move object is dumb data.
-        # However, usually notation is populated. 
-        # If not, let's assume standard 15x15 relative to bottom-left 1-indexed?
-        # Wait, standard gomoku: x=0->a, y=0->15 (top-left is a15)
-        # But our internal system: 0,0 is Top-Left?
-        # Let's look at how board.py adds move.
-        # Usually notation is provided by UI. 
-        # If not, let's return standard internal string
-        return f"{self.x},{self.y}"
+        # y=0 -> 15 (Top), y=14 -> 1 (Bottom)
+        row_num = size - self.y
+        
+        return f"{col_char}{row_num}"
 
 @dataclass
 class GameInfo:

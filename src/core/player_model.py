@@ -1,13 +1,13 @@
 """
-GomoProb V2: Bayesian Player Model
+GomoProb V3: Bayesian Player Model
 
 Implements the Bayesian framework for anti-cheating detection.
 P(Cheat | D) ∝ P(D | Cheat) × P(Cheat)
 
-Core concepts:
-- Prior P(Cheat): Base rate of cheating in the population
-- Likelihood P(D | Cheat): How likely is this data given cheating
-- Posterior P(Cheat | D): Updated probability after seeing data
+V3 Changes:
+- Uses MixtureModel for human likelihood (2-component Exponential)
+- Uses tempered likelihood for complexity weighting (replaces linear interpolation)
+- Online update is the single authoritative pathway
 """
 
 import math
@@ -15,6 +15,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from src.core.delta_model import DeltaModel, MoveAnalysis, GameAnalysis
+from src.core.mixture_model import (
+    MixtureModel,
+    log_likelihood_exponential,
+    log_likelihood_exponential_tempered,
+)
 
 
 @dataclass
@@ -39,43 +44,46 @@ class BayesianPlayerModel:
     """
     Bayesian framework for player classification.
     
-    Uses Bayes' theorem:
-        P(Cheat | D) = P(D | Cheat) × P(Cheat) / P(D)
-        
-    Where:
-        P(D) = P(D | Cheat) × P(Cheat) + P(D | Human) × P(Human)
-    
-    The likelihoods are computed from the Exponential delta model.
+    V3 uses:
+    - MixtureModel for P(D | Human): 2-component Exponential captures both
+      careful play and occasional blunders
+    - Single Exponential for P(D | Cheater): cheaters consistently play near-optimal
+    - Tempered likelihood for complexity weighting instead of linear interpolation
     """
     
     def __init__(
         self,
         prior_cheat: float = 0.01,           # 1% base rate
-        lambda_human: float = 5.0,            # Expected λ for humans
+        lambda_human: float = 5.0,            # LEGACY: kept for batch compatibility
         lambda_cheater: float = 50.0,         # Expected λ for cheaters
         threshold_suspicious: float = 0.3,    # P(Cheat) > this → Suspicious
-        threshold_cheater: float = 0.7        # P(Cheat) > this → Cheater
+        threshold_cheater: float = 0.7,       # P(Cheat) > this → Cheater
+        # V3: Mixture parameters for human model
+        mixture_pi: float = 0.75,             # Weight of "good play" component
+        mixture_lambda_good: float = 20.0,    # Rate for good plays
+        mixture_lambda_blunder: float = 3.0   # Rate for blunders
     ):
-        """
-        Args:
-            prior_cheat: Prior probability of cheating (before seeing data)
-            lambda_human: Expected Exponential rate for humans (lower = more variance)
-            lambda_cheater: Expected Exponential rate for cheaters (higher = less variance)
-            threshold_suspicious: P(Cheat) threshold for "Suspicious" label
-            threshold_cheater: P(Cheat) threshold for "Cheater" label
-        """
         self.prior_cheat = prior_cheat
         self.prior_human = 1.0 - prior_cheat
-        self.lambda_human = lambda_human
+        self.lambda_human = lambda_human  # Legacy batch parameter
         self.lambda_cheater = lambda_cheater
         self.threshold_suspicious = threshold_suspicious
         self.threshold_cheater = threshold_cheater
         
         self.delta_model = DeltaModel()
+        
+        # V3: Mixture model for human likelihood
+        self.mixture_model = MixtureModel(
+            pi=mixture_pi,
+            lambda_good=mixture_lambda_good,
+            lambda_blunder=mixture_lambda_blunder
+        )
     
     def compute_posterior(self, deltas: List[float]) -> Tuple[float, float, float, float]:
         """
         Compute posterior P(Cheat | D) using Bayes' theorem.
+        
+        V3: Uses mixture model for human likelihood.
         
         Args:
             deltas: List of winrate delta values for the game
@@ -84,31 +92,24 @@ class BayesianPlayerModel:
             Tuple of (p_cheat, p_human, log_lik_human, log_lik_cheater)
         """
         if not deltas:
-            # No data → stick with prior
             return self.prior_cheat, self.prior_human, 0.0, 0.0
         
-        # Compute log-likelihoods
-        log_lik_human = self.delta_model.log_likelihood_human(deltas, self.lambda_human)
-        log_lik_cheater = self.delta_model.log_likelihood_cheater(deltas, self.lambda_cheater)
+        # V3: Use mixture model for human likelihood
+        log_lik_human = self.mixture_model.log_likelihood(deltas)
         
-        # Convert to likelihoods (use log-sum-exp for numerical stability)
-        # P(D | Human) ∝ exp(log_lik_human)
-        # P(D | Cheat) ∝ exp(log_lik_cheater)
+        # Cheater: single Exponential (unchanged)
+        log_lik_cheater = self.delta_model.log_likelihood_cheater(
+            deltas, self.lambda_cheater
+        )
         
-        # Bayes' rule in log space:
-        # log P(Cheat | D) ∝ log_lik_cheater + log(prior_cheat)
-        # log P(Human | D) ∝ log_lik_human + log(prior_human)
-        
+        # Bayes' rule in log space
         log_post_cheat = log_lik_cheater + math.log(self.prior_cheat)
         log_post_human = log_lik_human + math.log(self.prior_human)
         
         # Normalize using log-sum-exp
         max_log = max(log_post_cheat, log_post_human)
-        
-        # exp(log_post_x - max) for numerical stability
         exp_cheat = math.exp(log_post_cheat - max_log)
         exp_human = math.exp(log_post_human - max_log)
-        
         total = exp_cheat + exp_human
         
         p_cheat = exp_cheat / total
@@ -120,11 +121,9 @@ class BayesianPlayerModel:
         """
         Classify a game based on its analysis.
         
-        Args:
-            game_analysis: GameAnalysis object from DeltaModel
-            
-        Returns:
-            PlayerClassification with final verdict
+        Note: In V3, this uses the mixture model for batch classification.
+        The online posterior (from update_online) is the preferred result
+        since it respects per-move complexity tempering.
         """
         deltas = [m.delta for m in game_analysis.moves]
         
@@ -140,8 +139,8 @@ class BayesianPlayerModel:
         
         # Confidence based on data amount and posterior certainty
         n_moves = len(deltas)
-        data_confidence = min(1.0, n_moves / 30)  # Full confidence at 30+ moves
-        posterior_certainty = abs(p_cheat - 0.5) * 2  # 0 at 50%, 1 at 0% or 100%
+        data_confidence = min(1.0, n_moves / 30)
+        posterior_certainty = abs(p_cheat - 0.5) * 2
         confidence = data_confidence * posterior_certainty
         
         return PlayerClassification(
@@ -165,51 +164,56 @@ class BayesianPlayerModel:
         """
         Online update of P(Cheat) after observing a new move.
         
-        Uses sequential Bayesian update with complexity weighting:
-            P(Cheat | D_new) ∝ P(D_new | Cheat) × P(Cheat | D_old)
-            
-        The update is weighted by complexity:
-        - High complexity (1.0): Full update weight
-        - Low complexity (0.0): Minimal update (trivial positions don't count)
+        V3: Uses TEMPERED LIKELIHOOD instead of linear interpolation.
+        
+        The tempering exponent α = complexity means:
+        - High complexity (1.0): Full evidence weight → P(D|H)^1.0
+        - Low complexity (0.1): Fractional evidence → P(D|H)^0.1
+        - Zero complexity (0.0): No evidence → posterior unchanged
+        
+        This is mathematically proper: tempering scales the log-likelihood,
+        making low-complexity observations contribute proportionally less
+        evidence without breaking Bayesian coherence.
         
         Args:
             current_posterior: Current P(Cheat | D_old)
             new_delta: New Δ value observed
-            complexity: Position complexity 0.0-1.0 (from calculate_complexity)
+            complexity: Position complexity 0.0-1.0 (used as tempering exponent)
             
         Returns:
             Updated P(Cheat | D_new)
         """
-        epsilon = 0.001
-        delta = max(new_delta, epsilon)
-        
-        # For trivial positions (complexity < 0.2), skip update entirely
-        if complexity < 0.2:
+        # α = 0 means no update (position is trivial, no information)
+        if complexity <= 0.0:
             return current_posterior
         
-        # Single observation likelihoods
-        lik_human = self.lambda_human * math.exp(-self.lambda_human * delta)
-        lik_cheater = self.lambda_cheater * math.exp(-self.lambda_cheater * delta)
+        # Tempered log-likelihoods
+        # Human: mixture model tempered
+        log_lik_human = self.mixture_model.log_likelihood_tempered(
+            new_delta, alpha=complexity
+        )
+        # Cheater: single Exponential tempered
+        log_lik_cheater = log_likelihood_exponential_tempered(
+            new_delta, self.lambda_cheater, alpha=complexity
+        )
         
-        # Use current posterior as new prior
-        prior_cheat = current_posterior
-        prior_human = 1.0 - current_posterior
+        # Use current posterior as prior (sequential Bayesian update)
+        # Handle edge cases where posterior is exactly 0 or 1
+        prior_cheat = max(1e-15, min(1.0 - 1e-15, current_posterior))
+        prior_human = 1.0 - prior_cheat
         
-        # Bayes update
-        numerator = lik_cheater * prior_cheat
-        denominator = lik_cheater * prior_cheat + lik_human * prior_human
+        # Bayes in log space
+        log_post_cheat = log_lik_cheater + math.log(prior_cheat)
+        log_post_human = log_lik_human + math.log(prior_human)
         
-        if denominator == 0:
+        # Normalize via log-sum-exp
+        max_log = max(log_post_cheat, log_post_human)
+        exp_cheat = math.exp(log_post_cheat - max_log)
+        exp_human = math.exp(log_post_human - max_log)
+        total = exp_cheat + exp_human
+        
+        if total == 0:
             return current_posterior
         
-        new_posterior = numerator / denominator
-        
-        # Weight the update by complexity
-        # High complexity (1.0) → use new_posterior fully
-        # Low complexity (0.3) → mostly keep old posterior
-        # Formula: interpolate between old and new based on complexity
-        weight = min(1.0, complexity * 1.25)  # Scale: 0.8 complexity = full weight
-        
-        weighted_posterior = (1.0 - weight) * current_posterior + weight * new_posterior
-        
-        return weighted_posterior
+        new_posterior = exp_cheat / total
+        return new_posterior

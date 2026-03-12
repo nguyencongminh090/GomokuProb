@@ -13,7 +13,7 @@ from src.core.config import AnalysisConfig
 from src.services.engine_service import EngineService, MoveEvaluation
 
 # V2 Imports
-from src.core.delta_model import DeltaModel, MoveAnalysis, GameAnalysis
+from src.core.delta_model import DeltaModel, MoveAnalysis, GameAnalysis, SoftmaxChoiceModel
 from src.core.player_model import BayesianPlayerModel, PlayerClassification
 from src.core.temporal_model import TemporalModel, TemporalAnalysis
 from src.core.feature_extractor import FeatureExtractor, FeatureVector
@@ -47,6 +47,9 @@ class V2MoveResult:
     # Opponent analysis (after human move)
     opponent_analysis: OpponentAnalysis = None
     
+    # V3: Softmax choice probability
+    softmax_choice_prob: float = 0.0  # P(this choice | candidates, τ)
+    
     # Static Pattern Context (V3)
     pattern_context: dict = None
 
@@ -71,6 +74,7 @@ class V2GameResult:
     
     # V3 Statistics
     pattern_stats: str = ""
+    temperature_mle: float = 0.1  # Softmax temperature estimate
 
 
 class V2AnalysisWorker(QObject):
@@ -127,6 +131,9 @@ class V2AnalysisWorker(QObject):
         # V3: Pattern Analyzer
         from src.core.pattern_analysis import PatternAnalyzer
         self.pattern_analyzer = PatternAnalyzer()
+        
+        # V3: Softmax Choice Model
+        self.softmax_model = SoftmaxChoiceModel()
     
     def run(self):
         """Main analysis loop."""
@@ -149,6 +156,9 @@ class V2AnalysisWorker(QObject):
         move_analyses: List[MoveAnalysis] = []
         move_results: List[V2MoveResult] = []
         p_cheat_running = self.config.prior_cheat  # Start with prior
+        
+        # V3: Collect softmax observations for temperature MLE
+        softmax_observations = []  # List of (candidate_winrates, chosen_index)
         
         # Track previous winrate for context-aware complexity
         prev_winrate = 0.5  # Initial balanced assumption
@@ -255,11 +265,26 @@ class V2AnalysisWorker(QObject):
                 )
                 move_analyses.append(move_analysis)
                 
-                # Update running P(Cheat) (online Bayesian update)
-                p_cheat_before = p_cheat_running  # Store BEFORE update for potential adjustment
+                # V3: Update running P(Cheat) (tempered Bayesian update)
                 p_cheat_running = self.player_model.update_online(p_cheat_running, delta, position_complexity)
                 
-                # Create result
+                # V3: Softmax choice probability
+                candidate_wrs = [c.winrate for c in candidates]
+                chosen_idx = -1
+                for ci, c in enumerate(candidates):
+                    if c.move_notation.lower() == move.notation.lower():
+                        chosen_idx = ci
+                        break
+                
+                softmax_prob = 0.0
+                if chosen_idx >= 0 and candidate_wrs:
+                    softmax_observations.append((candidate_wrs, chosen_idx))
+                    # Use a reference temperature of 0.1 for per-move display
+                    import math as _math
+                    softmax_prob = _math.exp(
+                        SoftmaxChoiceModel.log_prob_of_choice(candidate_wrs, chosen_idx, 0.1)
+                    )
+                
                 # Calculate context-aware accuracy
                 accuracy = calculate_accuracy(delta, position_complexity)
                 
@@ -275,6 +300,7 @@ class V2AnalysisWorker(QObject):
                     is_forced=is_forced,
                     position_complexity=position_complexity,
                     opponent_analysis=None,  # Will be filled after move added
+                    softmax_choice_prob=softmax_prob,
                     pattern_context=pattern_ctx  # V3 Pattern Data
                 )
                 move_results.append(result)
@@ -316,22 +342,8 @@ class V2AnalysisWorker(QObject):
                         # Update the result with opponent analysis
                         result.opponent_analysis = opp_analysis
                         
-                        # === RETROACTIVE P(CHEAT) ADJUSTMENT ===
-                        # If human created a forcing/winning sequence, reduce P(Cheat) weight
-                        # Rationale: Tactical patterns (VCF, threats) are easier to spot
-                        if opp_analysis.is_forcing or opp_analysis.move_quality == "Winning":
-                            # Interpolate back toward previous P(Cheat) using STORED value
-                            # More forcing = less suspicious
-                            reduction_factor = 0.5 if opp_analysis.move_quality == "Winning" else 0.7
-                            
-                            # Blend: move back toward what it was BEFORE this update
-                            old_value = p_cheat_running
-                            p_cheat_running = p_cheat_before * (1 - reduction_factor) + p_cheat_running * reduction_factor
-                            
-                            # Update result with adjusted value
-                            result.p_cheat_cumulative = p_cheat_running
-                            
-                            self.engine._log("STAGE", f"  P(Cheat) adjusted: {old_value*100:.1f}% → {p_cheat_running*100:.1f}% (forcing/winning)")
+                        # V3: Retroactive hack REMOVED — tempered likelihood handles
+                        # complexity/forcing naturally. No more ad-hoc posterior manipulation.
                         
                         # === STRATEGIC ACCURACY BONUS ===
                         # Boost accuracy score if move created complexity for opponent
@@ -364,21 +376,25 @@ class V2AnalysisWorker(QObject):
         # Build GameAnalysis
         game_analysis = self.delta_model.analyze_game(move_analyses)
         
-        # Bayesian classification - but use RUNNING p_cheat (with complexity weighting)
-        # instead of recalculating (which ignores complexity)
+        # V3: Use online posterior as the authoritative result
+        # (batch classify_game uses mixture model but without per-move tempering)
         classification = self.player_model.classify_game(game_analysis)
         
-        # Override with running value that respects complexity weighting
+        # Online posterior IS the final result (consistent single pathway)
         classification.p_cheat = p_cheat_running
         classification.p_human = 1.0 - p_cheat_running
         
-        # Re-classify based on corrected p_cheat
         if classification.p_cheat >= self.player_model.threshold_cheater:
             classification.classification = "Cheater"
         elif classification.p_cheat >= self.player_model.threshold_suspicious:
             classification.classification = "Suspicious"
         else:
             classification.classification = "Human"
+        
+        # V3: Estimate softmax temperature from all collected observations
+        temperature_mle = 0.1  # Default
+        if softmax_observations:
+            temperature_mle = self.softmax_model.estimate_temperature(softmax_observations)
         
         # Temporal analysis
         deltas = [m.delta for m in move_analyses]
@@ -397,7 +413,8 @@ class V2AnalysisWorker(QObject):
             temporal=temporal,
             total_moves=len(self.board.moves),
             analyzed_moves=len(move_analyses),
-            pattern_stats=self.pattern_analyzer.get_summary()
+            pattern_stats=self.pattern_analyzer.get_summary(),
+            temperature_mle=temperature_mle
         )
         
         # Log final results
@@ -412,6 +429,7 @@ class V2AnalysisWorker(QObject):
         self.engine._log("STAGE", f"  P(Cheat): {classification.p_cheat*100:.1f}%")
         self.engine._log("STAGE", f"  CLASSIFICATION: {classification.classification}")
         self.engine._log("STAGE", f"  Confidence: {classification.confidence*100:.1f}%")
+        self.engine._log("STAGE", f"  Softmax τ (MLE): {temperature_mle:.4f}")
         
         if temporal.is_suspicious:
             self.engine._log("STAGE", f"  ⚠️ SUSPICIOUS: Switch-point detected!")
