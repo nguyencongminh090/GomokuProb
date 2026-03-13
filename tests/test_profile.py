@@ -76,5 +76,61 @@ class TestProfileAnalyzer(unittest.TestCase):
         res_z = ProfileAnalyzer.analyze_suspect_game(15.0, history_30)
         self.assertAlmostEqual(res_z.critical_05, 1.645, places=3)
 
+
+import os
+import sqlite3
+from src.core.profile_store import ProfileStore
+
+class TestProfileStore(unittest.TestCase):
+    
+    def setUp(self):
+        self.test_db = "test_profiles.db"
+        if os.path.exists(self.test_db):
+            os.remove(self.test_db)
+        self.store = ProfileStore(self.test_db)
+        
+    def tearDown(self):
+        if os.path.exists(self.test_db):
+            os.remove(self.test_db)
+            
+    def test_num_moves_filter(self):
+        # 1. Add game with num_moves < 44
+        rec_short = ProfileRecord(
+            player_name="short_game_player",
+            timestamp="2024-01-01T12:00:00",
+            lambda_mle=15.0,
+            mean_delta=0.02,
+            num_moves=30,  # < 44
+            skill_tier="T_Intermediate",
+            lambda_human=15.0,
+            classification="Human",
+            confidence=0.90,
+            is_baseline=True # Even if true, get_baseline_games should filter it
+        )
+        self.store.add_game(rec_short)
+        
+        # 2. Add game with num_moves >= 44
+        rec_long = ProfileRecord(
+            player_name="long_game_player",
+            timestamp="2024-01-01T12:00:00",
+            lambda_mle=12.0,
+            mean_delta=0.015,
+            num_moves=50,  # >= 44
+            skill_tier="T_Advanced",
+            lambda_human=20.0,
+            classification="Human",
+            confidence=0.85,
+            is_baseline=True
+        )
+        self.store.add_game(rec_long)
+        
+        # Verify filtering
+        short_baselines = self.store.get_baseline_games("short_game_player")
+        self.assertEqual(len(short_baselines), 0, "Game with num_moves < 44 should be filtered out")
+        
+        long_baselines = self.store.get_baseline_games("long_game_player")
+        self.assertEqual(len(long_baselines), 1, "Game with num_moves >= 44 should be included")
+
+
 if __name__ == '__main__':
     unittest.main()

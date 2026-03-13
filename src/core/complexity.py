@@ -24,6 +24,12 @@ class ComplexityResult:
     mean_delta: float
     delta_spread: float
     improvement_ratio: float    # % of moves that improve position
+    
+    # V3 Opponent Difficulty metrics (Paper Sec 4.4)
+    opp_factor: float           # F_opp: 0.0 to 1.0
+    adjusted_complexity: float  # C_adj: C * max(F_opp, 0.10)
+    final_complexity: float     # C_final: final value after trivial override
+
 
 
 @dataclass
@@ -127,9 +133,24 @@ def calculate_opponent_metrics(
 
 
 
+W_REF = 0.40        # Eq. (15) calibration threshold
+ALPHA_MIN = 0.10    # floor in Eq. (16)
+
+def compute_f_opp(w_opp_best: float) -> float:
+    """Calculate Opponent Difficulty Factor (Eq. 15)."""
+    return min(w_opp_best / W_REF, 1.0)
+
+def compute_c_final(c_raw: float, f_opp: float, trivial_override: bool) -> tuple[float, float]:
+    """Calculate C_adj (Eq. 16) and C_final (Eq. 17). Returns (c_adj, c_final)."""
+    c_adj = c_raw * max(f_opp, ALPHA_MIN)
+    if trivial_override:
+        return c_adj, 0.10
+    return c_adj, c_adj
+
 def calculate_complexity(
     candidate_winrates: List[float], 
-    prev_winrate: float
+    prev_winrate: float,
+    w_opp_best: float = 0.50
 ) -> ComplexityResult:
     """
     Calculate Context-Aware Complexity using all candidates.
@@ -146,7 +167,8 @@ def calculate_complexity(
             complexity=0.5, impact_factor=0.5, variance_factor=0.5,
             criticality_factor=0.5, phase_factor=0.5,
             deltas=[], best_delta=0.0, mean_delta=0.0,
-            delta_spread=0.0, improvement_ratio=0.0
+            delta_spread=0.0, improvement_ratio=0.0,
+            opp_factor=1.0, adjusted_complexity=0.5, final_complexity=0.5
         )
     
     n = len(candidate_winrates)
@@ -203,21 +225,23 @@ def calculate_complexity(
     # then there's no real decision to make → trivial complexity
     is_trivially_won = best_wr > 0.95 and variance < 0.05
     is_trivially_lost = best_wr < 0.05 and variance < 0.05
+    is_trivial = is_trivially_won or is_trivially_lost
     
-    if is_trivially_won or is_trivially_lost:
-        complexity = 0.10  # Trivial - skip Bayesian update
-    else:
-        # === Combined Complexity ===
-        # Weight variance MORE heavily - low variance = easy decision
-        complexity = (
-            0.15 * impact +      # Reduced from 0.25
-            0.40 * variance +    # Increased from 0.25 - most important!
-            0.20 * criticality + # Slightly reduced
-            0.25 * phase
-        )
+    # === Combined Raw Complexity ===
+    # Weight variance MORE heavily - low variance = easy decision
+    c_raw = (
+        0.15 * impact +
+        0.40 * variance +
+        0.20 * criticality +
+        0.25 * phase
+    )
+    
+    # === Opponent Adjustment (V3 Eq. 15, 16, 17) ===
+    f_opp = compute_f_opp(w_opp_best)
+    c_adj, c_final = compute_c_final(c_raw, f_opp, is_trivial)
     
     return ComplexityResult(
-        complexity=complexity,
+        complexity=c_raw, # keep raw for legacy / internal structure
         impact_factor=impact,
         variance_factor=variance,
         criticality_factor=criticality,
@@ -226,7 +250,10 @@ def calculate_complexity(
         best_delta=best_delta,
         mean_delta=mean_delta,
         delta_spread=delta_spread,
-        improvement_ratio=improvement_ratio
+        improvement_ratio=improvement_ratio,
+        opp_factor=f_opp,
+        adjusted_complexity=c_adj,
+        final_complexity=c_final
     )
 
 

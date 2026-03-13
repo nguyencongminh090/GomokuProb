@@ -1,8 +1,9 @@
 % =============================================================================
 % A Bayesian Statistical Framework for Detecting Engine-Assisted Play
 % in Online Gomoku Competitions
-% Version 2 — Revised with Skill Stratification, Multi-Game Profile Analysis,
-%              Sample Size Theory, and Experimental Observations
+% Version 3 — Revised with Skill Stratification, Multi-Game Profile Analysis,
+%              Sample Size Theory, Experimental Observations,
+%              and Opponent-Adjusted Complexity
 % =============================================================================
 \documentclass[11pt,a4paper]{article}
 
@@ -78,21 +79,23 @@ performs sequential Bayesian updates over the course of a game, integrating
 a Boltzmann choice model, information-theoretic divergence measures, and
 temporal switch-point detection to identify mid-game engine activation.
 We further introduce \emph{player skill stratification} to address the
-false-positive problem arising from strong legitimate players, and a formal
+false-positive problem arising from strong legitimate players, a formal
 \emph{multi-game profile analysis} grounded in confidence-interval theory
-and hypothesis testing for population-level inference. A formal likelihood
-ratio test grounded in Neyman--Pearson theory provides false-positive rate
-control. We describe the complete mathematical formulation, the system
-architecture for engine integration, and the classification decision
-boundaries, and report preliminary experimental observations that motivate
-several design choices.
+and hypothesis testing for population-level inference, and an
+\emph{opponent-adjusted complexity} mechanism that corrects for positions
+made artificially easy by a weak opponent---a previously unaddressed source
+of false-positive inflation. A formal likelihood ratio test grounded in
+Neyman--Pearson theory provides false-positive rate control. We describe
+the complete mathematical formulation, the system architecture for engine
+integration, and the classification decision boundaries, and report
+preliminary experimental observations that motivate several design choices.
 
 \medskip
 \noindent
 \textbf{Keywords:} Anti-cheating, Bayesian inference, Gomoku, engine-assisted
 play detection, online gaming integrity, mixture model, Gamma distribution,
 Weibull distribution, Dirichlet process, information theory, temporal analysis,
-skill stratification, profile analysis.
+skill stratification, profile analysis, opponent-adjusted complexity.
 \end{abstract}
 
 % =============================================================================
@@ -111,14 +114,15 @@ highly effective and difficult to distinguish from expert human play through
 casual observation alone.
 
 Existing anti-cheating measures in online gaming have largely relied on
-behavioral heuristics---such as timing patterns, mouse movement tracking, or
-tab-switching detection---which are easily circumvented by sophisticated
+behavioral heuristics---such as timing patterns, mouse movement tracking,
+or tab-switching detection---which are easily circumvented by sophisticated
 cheaters. Statistical approaches have been explored in chess
-\citep{regan2011intrinsic}, but relatively little formal work has been published
-for Gomoku and its variants. Furthermore, many deployed systems rely on ad-hoc
-thresholds (e.g., ``if accuracy exceeds 90\%, flag the player'') without a
-coherent probabilistic foundation, leading to both false positives against
-strong legitimate players and false negatives against selective cheaters.
+\citep{regan2011intrinsic}, but relatively little formal work has been
+published for Gomoku and its variants. Furthermore, many deployed systems
+rely on ad-hoc thresholds (e.g., ``if accuracy exceeds 90\%, flag the
+player'') without a coherent probabilistic foundation, leading to both
+false positives against strong legitimate players and false negatives
+against selective cheaters.
 
 A fundamental challenge, which we term the \emph{skill-confounding problem},
 arises because a single-population null hypothesis $H_0$ cannot simultaneously
@@ -146,6 +150,9 @@ statistical framework that:
           change-point detection to identify partial or mid-game engine use.
     \item Stratifies the null hypothesis by player skill level and aggregates
           evidence across multiple games via a formal profile analysis.
+    \item Corrects for \emph{opponent-induced easy positions} via an
+          opponent-adjusted complexity mechanism that prevents artificially
+          inflated posteriors when the analyzed player faces a weak opponent.
 \end{enumerate}
 
 \subsection{Contributions}
@@ -179,6 +186,10 @@ The main contributions of this work are:
     \item \textbf{Temporal Switch-Point Detection.} We develop a temporal model
           that detects abrupt changes in play quality, identifying possible
           mid-game engine activation.
+    \item \textbf{Opponent-Adjusted Complexity.} We identify and formalize the
+          \emph{opponent-difficulty confound}---the systematic inflation of
+          false-positive rates when the analyzed player faces a weak opponent---
+          and introduce the Opponent Difficulty Factor to correct for it.
     \item \textbf{Complete System Design.} We describe the full architecture for
           integrating an external game engine as an evaluation oracle within the
           detection pipeline.
@@ -224,12 +235,12 @@ typically rely on fixed thresholds rather than probabilistic inference.
 
 \subsection{Statistical Methods for Fair Play}
 
-Broader statistical approaches to fair play detection include hypothesis testing
-frameworks~\citep{berger1987testing}, where the null hypothesis is honest play
-and the alternative is engine assistance. The challenge lies in controlling the
-false positive rate---strong human players naturally exhibit high move quality,
-and a framework that flags top-level play as suspicious undermines competitive
-integrity.
+Broader statistical approaches to fair play detection include hypothesis
+testing frameworks~\citep{berger1987testing}, where the null hypothesis
+is honest play and the alternative is engine assistance. The challenge
+lies in controlling the false positive rate---strong human players
+naturally exhibit high move quality, and a framework that flags top-level
+play as suspicious undermines competitive integrity.
 
 \subsection{Gomoku-Specific Considerations}
 
@@ -578,16 +589,138 @@ clamped to $[0,1]$.
 \end{equation}
 
 \begin{proposition}[Trivial Position Override]
+\label{prop:trivial}
 If $w^* > 0.95$ or $w^* < 0.05$ and $F_{\text{variance}} < 0.05$,
 then $C = 0.10$.
 \end{proposition}
 
-\subsection{Context-Aware Accuracy}
+\subsection{Opponent-Adjusted Complexity}
+\label{sec:opp_complexity}
+
+The complexity score $C$ defined above depends solely on the \emph{analyzed
+player's} candidate move evaluations, and is therefore blind to the state
+of the opponent's position. This creates a systematic bias that we term
+the \emph{opponent-difficulty confound}.
+
+\begin{definition}[Opponent-Difficulty Confound]
+\label{def:opp_confound}
+When the analyzed player's opponent is in a severely losing position,
+many of the player's candidate moves achieve near-optimal winrate
+(because the opponent has no effective defense). A one-sided complexity
+model that ignores opponent position assigns non-negligible complexity
+$C$ to these positions, incorrectly treating trivially-optimal play as
+informative evidence of engine assistance.
+\end{definition}
+
+\begin{remark}[Empirical Motivation]
+\label{rem:opp_motivation}
+In a preliminary game analysis (Section~\ref{sec:exp_opp}), multiple
+late-game positions were assigned complexity $C \approx 0.49$ despite the
+opponent's best available move having a winrate below $0.3\%$.
+The Trivial Position Override (Proposition~\ref{prop:trivial}) failed to
+activate because $w^*$ had not yet exceeded the $0.95$ threshold from the
+player's perspective, while the opponent was already effectively defeated.
+These positions contributed spurious evidence toward $H_1$.
+\end{remark}
+
+\subsubsection{Opponent Difficulty Factor}
+
+Let $w^*_{\text{opp}}$ denote the best available winrate for the opponent
+at position $t$, expressed from the \emph{opponent's perspective} (i.e.,
+already normalized via $w_{\text{opp}} = 1 - w_{\text{player}}$ per
+Remark~1). The \emph{Opponent Difficulty Factor} is defined as:
 
 \begin{equation}
-    A(\Delta, C) = \begin{cases}
+    F_{\text{opp}} = \min\!\left(\frac{w^*_{\text{opp}}}{w_{\text{ref}}},\;
+    1.0\right),
+    \label{eq:f_opp}
+\end{equation}
+where $w_{\text{ref}} = 0.40$ is a calibration threshold representing the
+winrate below which the opponent is no longer considered a meaningful
+competitive threat. The factor $F_{\text{opp}} \in [0, 1]$ takes value~$1$
+when the opponent is fully competitive and decreases toward~$0$ as the
+opponent's position becomes hopeless.
+
+\begin{remark}[Temporal Indexing]
+To avoid circular dependency, $w^*_{\text{opp}}$ at position $t$ is
+evaluated \emph{after the opponent's most recent move} and \emph{before}
+the analyzed player's current move is played. This ensures that we measure
+the opponent's strength at the moment the decision is made, not the
+consequence of the player's own move.
+\end{remark}
+
+\subsubsection{Opponent-Adjusted Complexity Score}
+
+The raw complexity $C$ (Equation~\eqref{eq:complexity}) is adjusted as:
+
+\begin{equation}
+    C_{\text{adj}} = C \cdot \max\!\left(F_{\text{opp}},\; \alpha_{\min}\right),
+    \label{eq:c_adj}
+\end{equation}
+where $\alpha_{\min} = 0.10$ ensures that a minimum residual weight is
+retained even in extreme cases, preserving the continuity of the evidence
+accumulation process.
+
+The final complexity used in all downstream computations (tempered
+likelihood, context-aware accuracy) is:
+\begin{equation}
+    C_{\text{final}} = \begin{cases}
+        0.10 & \text{if Trivial Position Override is triggered,} \\
+        C_{\text{adj}} & \text{otherwise.}
+    \end{cases}
+    \label{eq:c_final}
+\end{equation}
+
+\begin{remark}[Effect on Tempered Likelihood]
+Note that $C_{\text{final}}$ acts as the tempering exponent $\alpha$ in
+Equation~\eqref{eq:tempering}. Therefore, when the opponent is nearly
+defeated ($F_{\text{opp}} \approx 0$), the tempered likelihood approaches
+$P(\Delta \mid H)^{\alpha_{\min}} = P(\Delta \mid H)^{0.10}$, contributing
+only minimal evidence to the Bayesian posterior regardless of how small $\Delta$
+is. This is the mathematically correct behavior: a perfect move in a
+trivially-won position reveals nothing about the player's computational
+capability.
+\end{remark}
+
+Table~\ref{tab:opp_example} illustrates the effect of the adjustment on
+representative positions from the experimental game log.
+
+\begin{table}[H]
+\centering
+\caption{Effect of Opponent-Adjusted Complexity on selected moves
+(experimental game, Black side). $C$ denotes raw complexity;
+$F_{\text{opp}}$ denotes the Opponent Difficulty Factor;
+$C_{\text{adj}}$ denotes the adjusted complexity.}
+\label{tab:opp_example}
+\begin{tabular}{ccccccl}
+\toprule
+Move & $\Delta$ & $C$ & $w^*_{\text{opp}}$ & $F_{\text{opp}}$ &
+$C_{\text{adj}}$ & Opp Quality \\
+\midrule
+\#7  & 0.0\% & 0.56 & 36.9\% & 0.92 & 0.515 & Passive (competitive) \\
+\#9  & 3.5\% & 0.46 & 36.4\% & 0.91 & 0.419 & Tactical (competitive) \\
+\#11 & 0.0\% & 0.62 & 22.9\% & 0.57 & 0.355 & Tactical (weakening) \\
+\#13 & 0.0\% & 0.47 & 0.2\%  & \textbf{0.005} & \textbf{0.047} & Winning (trivial) \\
+\#33 & 0.0\% & 0.49 & 0.2\%  & \textbf{0.005} & \textbf{0.049} & Winning (trivial) \\
+\#35 & 0.0\% & 0.10 & 0.2\%  & 0.005 & 0.010 & Override applied \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Without the adjustment, moves \#13 and \#33 contribute $C = 0.47$--$0.49$
+worth of evidence toward $H_1$ despite occurring in trivially-decided
+positions. With $C_{\text{adj}}$, their evidential contribution drops to
+$\approx 0.05$, commensurate with their actual informativeness.
+
+\subsection{Context-Aware Accuracy}
+
+All accuracy and likelihood computations use $C_{\text{final}}$
+(Equation~\eqref{eq:c_final}) in place of the raw complexity $C$:
+\begin{equation}
+    A(\Delta, C_{\text{final}}) = \begin{cases}
         1.0 & \text{if } \Delta \leq 0.02, \\
-        \exp\!\left(-5 \Delta (1 - 0.3C)\right) & \text{otherwise.}
+        \exp\!\left(-5 \Delta (1 - 0.3 C_{\text{final}})\right) &
+        \text{otherwise.}
     \end{cases}
 \end{equation}
 
@@ -635,6 +768,7 @@ where $\ell_j = L_j + \log P(H_j)$ and $m = \max(\ell_0, \ell_1)$.
 
 We raise the likelihood to the power of the positional complexity $C$:
 \begin{equation}
+    \label{eq:tempering}
     P(\Delta \mid H)^{C} \quad \Longleftrightarrow \quad
     C \cdot \log P(\Delta \mid H).
 \end{equation}
@@ -1130,6 +1264,94 @@ into the present version of the framework: (i) stratified null hypothesis
 (Section~\ref{sec:profile}), and (iii) increased data-sufficiency threshold
 $n_0$ in the confidence formula (Section~\ref{sec:bayesian}).
 
+\subsection{Case Study: Opponent-Difficulty Confound}
+\label{sec:exp_opp}
+
+\paragraph{Setup.} We analyzed a complete game (21 moves of Black analyzed,
+confirmed ground truth: no engine assistance) to investigate the effect of
+opponent weakness on the complexity score. The opponent was a significantly
+weaker player who lost decisively by move~33.
+
+\paragraph{Results.}
+
+\begin{table}[H]
+\centering
+\caption{Summary statistics for the opponent-difficulty case study.}
+\label{tab:experiment2}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Analyzed moves              & 21      \\
+Mean $\Delta$               & 3.1\%   \\
+$\hat{\lambda}_\text{MLE}$  & 31.31   \\
+Near-optimal \%             & 66.7\%  \\
+$P(\text{Cheat})$           & 0.0\%   \\
+Classification              & \textbf{Human} \\
+Confidence                  & 70.0\%  \\
+$\log \Lambda$              & $-4.48$ \\
+$\hat{\tau}$                & 0.1262  \\
+$S_\tau$                    & 7.92    \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Observations.}
+
+\begin{enumerate}
+    \item \textbf{Correct classification despite opponent weakness:}
+          The framework correctly classified this game as Human
+          ($P(\text{Cheat}) = 0.0\%$), driven primarily by two
+          large-delta moves: Move~\#23 ($\Delta = 19.7\%$) and
+          Move~\#15 ($\Delta = 17.5\%$). These blunders are characteristic
+          of human play and strongly favor $H_0$.
+
+    \item \textbf{Opponent-difficulty confound identified:}
+          Inspection of the move-level log reveals a qualitative pattern
+          directly motivating Section~\ref{sec:opp_complexity}. From
+          Move~\#13 onward, the opponent's best available winrate dropped
+          below $0.3\%$ (Quality: Winning), yet multiple positions in the
+          range Move~\#13--\#33 were assigned raw complexity $C \approx
+          0.47$--$0.49$ based on candidate variance alone.
+          Without $C_{\text{adj}}$, the nine near-optimal moves in the
+          winning phase would contribute substantial spurious evidence
+          toward $H_1$ in games with lower $\Delta$ overall.
+
+    \item \textbf{Trivial Position Override activates late:}
+          The Override (Proposition~\ref{prop:trivial}) activated only at
+          Move~\#35 onward, once $w^*$ exceeded $0.999$. Between Move~\#13
+          and Move~\#35, a gap of eleven analyzed moves, the opponent had
+          effectively lost but the Override was not triggered. This confirms
+          the need for the Opponent Difficulty Factor as a complementary
+          mechanism that operates on \emph{opponent} winrate rather than
+          \emph{player} winrate.
+
+    \item \textbf{Log LR is negative:}
+          $\log \Lambda = -4.48$ indicates that the data are $e^{4.48}
+          \approx 88$ times \emph{more likely} under $H_0$ than $H_1$,
+          consistent with correct Human classification. This contrasts
+          sharply with the professional player case study ($\log \Lambda =
+          22.46$), demonstrating that the presence of genuine blunders
+          ($\Delta \geq 15\%$) is a powerful discriminating signal.
+
+    \item \textbf{EM identifies human-like blunder component:}
+          The EM algorithm fitted $\lambda_g = 9334$ (near-perfect moves)
+          and $\lambda_b = 10.69$ ($\E[\Delta_b] = 9.4\%$, genuine blunders),
+          with mixing weight $\pi = 0.666$. The lower $\pi$ relative to the
+          professional player case ($\pi = 0.862$) quantifies the higher
+          blunder rate and is consistent with the ground-truth classification.
+\end{enumerate}
+
+\paragraph{Implication for Framework Design.}
+This case study confirms that the Opponent Difficulty Factor
+(Section~\ref{sec:opp_complexity}) is necessary as a complement to the
+Trivial Position Override. The Override handles the extreme case of
+$w^* > 0.95$ from the player's perspective; the Opponent Difficulty Factor
+handles the intermediate case where the opponent is functionally defeated
+but the player's winrate has not yet reached the Override threshold.
+Together they provide comprehensive suppression of opponent-induced
+false-positive inflation.
+
 
 % =============================================================================
 % 12. DISCUSSION
@@ -1150,6 +1372,10 @@ $n_0$ in the confidence formula (Section~\ref{sec:bayesian}).
     \item \textbf{Profile analysis.} Multi-game aggregation provides
           statistically sound, sample-size-justified conclusions that
           single-game analysis cannot support.
+    \item \textbf{Opponent-difficulty correction.} The Opponent Difficulty
+          Factor prevents false-positive inflation when the analyzed player
+          faces a weak opponent, addressing a source of bias absent from
+          prior frameworks.
     \item \textbf{Modularity and transparency.} Each component can be
           independently validated, updated, or replaced.
 \end{enumerate}
@@ -1175,6 +1401,12 @@ $n_0$ in the confidence formula (Section~\ref{sec:bayesian}).
     \item \textbf{Stationarity.} Profile analysis assumes approximately
           stationary skill levels (Remark~\ref{rem:stationarity}). Structural
           breaks from genuine improvement may mimic the onset of cheating.
+    \item \textbf{Opponent difficulty calibration.} The reference threshold
+          $w_{\text{ref}} = 0.40$ and the minimum floor $\alpha_{\min} = 0.10$
+          in the Opponent Difficulty Factor (Equation~\eqref{eq:c_adj}) are
+          heuristically chosen. Empirical calibration from labeled game data
+          is required; in particular, $w_{\text{ref}}$ may need to be
+          game-phase dependent (e.g., lower in the opening than in the endgame).
     \item \textbf{Tier boundary ambiguity.} The overlap between
           $T_4$ (professional) and $H_1$ (engine-assisted) distributions
           represents a fundamental statistical limit: it may not be possible
@@ -1214,6 +1446,11 @@ without stratification, professional players are incorrectly flagged at rates
 comparable to engine-assisted players. The profile-based framework developed
 in Section~\ref{sec:profile} provides a statistically principled resolution,
 with sample size requirements derived from confidence-interval theory.
+Additionally, we identify and formalize the \emph{opponent-difficulty confound}:
+positions made trivially easy by a weak opponent generate spurious evidence
+toward $H_1$ under one-sided analysis. The Opponent Difficulty Factor
+(Section~\ref{sec:opp_complexity}) corrects for this bias by weighting
+evidential contribution by the opponent's competitive viability.
 
 \subsection{Future Work}
 
@@ -1228,14 +1465,17 @@ with sample size requirements derived from confidence-interval theory.
           where $A$ is the transition matrix. This subsumes switch-point
           detection as a special case~\citep{rabiner1989tutorial}.
 
-    \item \textbf{Empirical calibration:} Fitting all model parameters via EM,
-          MCMC, or variational inference on large labeled datasets. KS and
-          Anderson--Darling tests should validate distributional assumptions.
+    \item \textbf{Empirical calibration:} Fitting all model parameters via
+          EM, MCMC, or variational inference on large labeled datasets. KS
+          and Anderson--Darling tests should validate distributional
+          assumptions. This includes calibration of $w_{\text{ref}}$ and
+          $\alpha_{\min}$ in the Opponent Difficulty Factor across different
+          game phases and competitive contexts.
 
     \item \textbf{Systematic empirical evaluation:} Benchmarking on three
           scenario types---confirmed human games, engine self-play, and
-          suspected games---with full ROC curve, AUC, precision--recall, and
-          confusion matrix reporting.
+          suspected games---with full ROC curve, AUC, precision--recall,
+          and confusion matrix reporting.
 
     \item \textbf{Tier boundary calibration:} Determining empirically where
           the $T_4$/$H_1$ boundary lies using paired professional-play and

@@ -280,11 +280,12 @@ class V2AnalysisWorker(QObject):
                 
                 # Context-Aware Complexity using all candidates
                 candidate_winrates = [c.winrate for c in candidates]
-                complexity_result = calculate_complexity(candidate_winrates, prev_winrate)
-                position_complexity = complexity_result.complexity
+                complexity_result = calculate_complexity(candidate_winrates, prev_winrate, w_opp_best=prev_opp_best)
+                position_complexity = complexity_result.final_complexity
                 
                 # Log complexity details
-                self.engine._log("STAGE", f"  Complexity: {position_complexity:.2f} (Impact={complexity_result.impact_factor:.2f}, Var={complexity_result.variance_factor:.2f})")
+                self.engine._log("STAGE", f"  Complexity (Raw): {complexity_result.complexity:.2f} (Impact={complexity_result.impact_factor:.2f}, Var={complexity_result.variance_factor:.2f})")
+                self.engine._log("STAGE", f"  Opponent Adj: F_opp={complexity_result.opp_factor:.2f} | C_adj={complexity_result.adjusted_complexity:.2f} | C_final={complexity_result.final_complexity:.2f}")
                 self.engine._log("STAGE", f"  Prev WR: {prev_winrate*100:.1f}% → Best WR: {best_wr*100:.1f}%")
                 
                 # Create MoveAnalysis
@@ -345,11 +346,10 @@ class V2AnalysisWorker(QObject):
                 self.engine._log("STAGE", f"  Δ = {delta*100:.1f}%")
                 self.engine._log("STAGE", f"  P(Cheat) running = {p_cheat_running*100:.1f}%")
             
-            # Update previous winrate for next move's complexity calculation
-            # Keep SAME perspective: prev_wr = best achievable WR from this analyzed move
-            if should_analyze and best_eval:
-                prev_winrate = best_wr
-                prev_opp_best = 1.0 - played_wr  # Opponent's WR before their response
+            # Update previous winrate for next move's complexity calculation (Fix Issue #4)
+            # Use the actual played winrate as the new baseline
+            if should_analyze and played_eval:
+                prev_winrate = played_wr
             
             # Add move to board
             current_board.add_move(move.x, move.y, move.color, move.notation)
@@ -373,18 +373,28 @@ class V2AnalysisWorker(QObject):
                         opp_winrates = [e.winrate for e in opp_candidates]
                         opp_analysis = calculate_opponent_metrics(opp_winrates, prev_opp_best)
                         
+                        # V3 TASK-04 Update prev_opp_best for the next turn's F_opp calculation
+                        prev_opp_best = opp_analysis.opp_best
+                        
                         # Update the result with opponent analysis
                         result.opponent_analysis = opp_analysis
                         
                         # V3: Retroactive hack REMOVED — tempered likelihood handles
                         # complexity/forcing naturally. No more ad-hoc posterior manipulation.
                         
-                        # === STRATEGIC ACCURACY BONUS ===
+                        # === STRATEGIC ACCURACY BONUS (Fix Issue #3) ===
+                        # Compute C_opp correctly from opponent's perspective
+                        opp_complex_result = calculate_complexity(
+                            opp_winrates,
+                            prev_winrate=1.0 - prev_winrate # Convert human's prev_wr to opponent's perspective
+                        )
+                        c_opp = opp_complex_result.complexity # Raw complexity
+                        
                         # Boost accuracy score if move created complexity for opponent
                         new_accuracy = calculate_accuracy(
                             delta, 
                             position_complexity, 
-                            opponent_complexity=opp_analysis.opp_variance
+                            opponent_complexity=c_opp
                         )
                         if new_accuracy > result.accuracy_score:
                              self.engine._log("STAGE", f"  Strategic Bonus: Acc {result.accuracy_score*100:.1f}% → {new_accuracy*100:.1f}%")
@@ -396,12 +406,32 @@ class V2AnalysisWorker(QObject):
                         self.engine._log("STAGE", f"  Forcing: {opp_analysis.forcing_level*100:.0f}% | Pressure: {opp_analysis.pressure*100:.1f}% | Viable: {opp_analysis.viable_count}")
                         self.engine._log("STAGE", f"  Quality: {opp_analysis.move_quality}")
                     else:
+                        # Fix Bug #2: Decay stale prev_opp_best if no candidates 
+                        prev_opp_best = prev_opp_best * 0.7 + 0.5 * 0.3
                         self.engine._log("STAGE", f"  (No opponent candidates)")
                 
                 self.engine._log("STAGE", f"")
                 
                 # Emit per-move result (after opponent analysis added)
                 self.move_result.emit(result)
+            else:
+                # Bug #1: We are skipping analysis for this move (opponent's turn).
+                # However, we MUST compute the opponent's *actual* best option from the
+                # position AFTER they moved, so that F_opp is accurate for the human's NEXT turn.
+                winner = current_board.check_win()
+                if winner == 0 and self.is_running:
+                    # Quick engine call to evaluate state after opponent played
+                    quick_candidates = self.engine.analyze(
+                        current_board,
+                        top_n=3,
+                        time_limit=time_limit_sec * 0.2, # Very fast
+                        node_limit=self.config.node_limit // 4 if self.config.node_limit else None
+                    )
+                    if quick_candidates:
+                        human_best = max(c.winrate for c in quick_candidates)
+                        prev_opp_best = 1.0 - human_best
+                    else:
+                        prev_opp_best = prev_opp_best * 0.7 + 0.5 * 0.3
         
         # ----------------------------
         # POST-GAME ANALYSIS
