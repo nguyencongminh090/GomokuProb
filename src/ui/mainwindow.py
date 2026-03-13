@@ -4,7 +4,8 @@ Main Window for Gomoku Analysis Tool.
 
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QFileDialog, QDockWidget, 
-                             QTextEdit, QProgressBar, QSplitter, QMenu, QTabWidget)
+                             QTextEdit, QProgressBar, QSplitter, QMenu, QTabWidget,
+                             QLineEdit, QCheckBox)
 from PyQt6.QtGui import QAction
 from PyQt6.QtCore import Qt, pyqtSignal
 import sys
@@ -124,11 +125,21 @@ class MainWindow(QMainWindow):
         controls_layout = QHBoxLayout()
         self.btn_load = QPushButton("Load Game / Position")
         self.btn_settings = QPushButton("Settings")
+        
+        # V4 Profile Input
+        self.player_input = QLineEdit()
+        self.player_input.setPlaceholderText("Player Name (for Profile)")
+        self.player_input.setFixedWidth(150)
+        self.chk_save_profile = QCheckBox("Save to DB")
+        self.chk_save_profile.setChecked(True)
+        
         self.btn_analyze = QPushButton("Start Analysis") # Text will toggle
         self.btn_analyze.setEnabled(False) # Disable until loaded
         
         controls_layout.addWidget(self.btn_load)
         controls_layout.addWidget(self.btn_settings)
+        controls_layout.addWidget(self.player_input)
+        controls_layout.addWidget(self.chk_save_profile)
         controls_layout.addWidget(self.btn_analyze)
         analysis_layout.addLayout(controls_layout)
         
@@ -244,7 +255,9 @@ class MainWindow(QMainWindow):
         if self.view_model.state == SystemState.RUNNING:
             self.view_model.stop_analysis()
         elif self.view_model.state == SystemState.IDLE:
-            self.view_model.start_analysis()
+            player_name = self.player_input.text().strip()
+            save_profile = self.chk_save_profile.isChecked()
+            self.view_model.start_analysis(player_name, save_profile)
 
     def on_game_loaded(self, move_count):
         self.log(f"Game loaded successfully: {move_count} moves.")
@@ -257,6 +270,8 @@ class MainWindow(QMainWindow):
             self.btn_analyze.setEnabled(True)
             self.btn_load.setEnabled(False)
             self.btn_settings.setEnabled(False)
+            self.player_input.setEnabled(False)
+            self.chk_save_profile.setEnabled(False)
             
             # Clear logs only on new start? 
             # Ideally ViewModel controls when to clear, but UI logic is fine here.
@@ -278,6 +293,8 @@ class MainWindow(QMainWindow):
             self.btn_analyze.setEnabled(True)
             self.btn_load.setEnabled(True)
             self.btn_settings.setEnabled(True)
+            self.player_input.setEnabled(True)
+            self.chk_save_profile.setEnabled(True)
             self.log("Analysis finished/stopped.")
             self.progress_bar.setVisible(False)
             

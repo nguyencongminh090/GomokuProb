@@ -20,6 +20,9 @@ from src.core.delta_model import (
 from src.core.player_model import BayesianPlayerModel, PlayerClassification
 from src.core.temporal_model import TemporalModel, TemporalAnalysis
 from src.core.feature_extractor import FeatureExtractor, FeatureVector
+from src.core.pattern_analysis import PatternAnalyzer
+from src.core.profile_store import ProfileStore, ProfileRecord
+from src.core.profile_analyzer import ProfileAnalyzer, ProfileResult
 from src.core.information_theory import InformationTheory
 from src.core.complexity import (
     calculate_complexity, calculate_accuracy, ComplexityResult,
@@ -91,6 +94,10 @@ class V2GameResult:
     em_pi: float = 0.0
     em_lambda_good: float = 0.0
     em_lambda_blunder: float = 0.0
+    
+    # V4: Profile Analysis results (Paper Section 10.2)
+    profile_result: Optional[ProfileResult] = None
+
 
 
 class V2AnalysisWorker(QObject):
@@ -114,13 +121,20 @@ class V2AnalysisWorker(QObject):
         self,
         engine_service: EngineService,
         board: BoardState,
-        config: AnalysisConfig
+        config: AnalysisConfig,
+        player_name: str = "",
+        save_to_profile: bool = False
     ):
         super().__init__()
         self.engine = engine_service
         self.board = board
         self.config = config
+        self.player_name = player_name.strip()
+        self.save_to_profile = save_to_profile
         self.is_running = True
+        
+        # Profile DB
+        self.profile_store = ProfileStore()
         
         # Initialize V2 models from config
         self.delta_model = DeltaModel(
@@ -467,6 +481,31 @@ class V2AnalysisWorker(QObject):
         features.p_cheat = classification.p_cheat
         features.classification = classification.classification
         
+        # ----------------------------
+        # V4 PROFILE ANALYSIS & ESCALATION
+        # ----------------------------
+        profile_res = None
+        if self.player_name:
+            history = self.profile_store.get_baseline_games(self.player_name)
+            profile_res = ProfileAnalyzer.analyze_suspect_game(features.lambda_mle, history)
+            
+            # Escalation Rules (Paper Section 10.2)
+            if profile_res.status != "INSUFFICIENT_DATA":
+                z_stat = profile_res.test_statistic
+                crit_05 = profile_res.critical_05
+                crit_01 = profile_res.critical_01
+                
+                if classification.classification == "Suspicious" and z_stat > crit_05:
+                    classification.classification = "Suspicious-Elevated"
+                elif classification.classification == "Human":
+                    if z_stat > crit_01:
+                        classification.classification = "Manual Review"
+                    elif z_stat > crit_05:
+                        # Paper says confirmed Human requires Z <= z_0.05
+                        classification.classification = "Inconsistent (Z-score)"
+                        
+        # ----------------------------
+        
         # Build final result
         game_result = V2GameResult(
             moves=move_results,
@@ -484,7 +523,34 @@ class V2AnalysisWorker(QObject):
             em_pi=em_pi,
             em_lambda_good=em_lg,
             em_lambda_blunder=em_lb,
+            profile_result=profile_res
         )
+        
+        # V4 Profile Saving (Paper Section 8 strict baseline rules)
+        if self.player_name and self.save_to_profile:
+            # Strict logic: must be Human, confident >= 0.7, p_cheat < 0.20, and enough moves
+            is_baseline_game = (
+                classification.classification == "Human" and
+                classification.confidence >= 0.70 and
+                classification.p_cheat < 0.20 and
+                len(move_analyses) >= 44
+            )
+            
+            record = ProfileRecord(
+                player_name=self.player_name,
+                timestamp="", # Auto-generated
+                lambda_mle=features.lambda_mle,
+                mean_delta=features.mean_delta,
+                num_moves=len(move_analyses),
+                skill_tier="T_Unassigned", # Could map this via lambda_human
+                lambda_human=self.player_model.mixture_model.lambda_good,
+                classification=classification.classification,
+                confidence=classification.confidence,
+                is_baseline=is_baseline_game
+            )
+            self.profile_store.add_game(record)
+            self.engine._log("INFO", f"Saved game to profile for '{self.player_name}' (Baseline: {is_baseline_game})")
+
         
         # Log final results
         self.engine._log("STAGE", f"")
@@ -525,6 +591,20 @@ class V2AnalysisWorker(QObject):
             self.engine._log("STAGE", f"    π={em_pi:.3f} (default={self.player_model.mixture_model.pi:.3f})")
             self.engine._log("STAGE", f"    λ_good={em_lg:.2f} (default={self.player_model.mixture_model.lambda_good:.2f})")
             self.engine._log("STAGE", f"    λ_blunder={em_lb:.2f} (default={self.player_model.mixture_model.lambda_blunder:.2f})")
+            
+        # V4: Log Profile Analysis
+        if profile_res:
+            self.engine._log("STAGE", f"  --- Profile History Analysis ({self.player_name}) ---")
+            if profile_res.status == "INSUFFICIENT_DATA":
+                self.engine._log("STAGE", f"    Status: Profile building (m={profile_res.m_games}). Need m>=2.")
+            else:
+                self.engine._log("STAGE", f"    Based on {profile_res.m_games} historical games")
+                self.engine._log("STAGE", f"    Historical Baseline: λ_bar = {profile_res.lambda_bar:.2f} (s_λ = {profile_res.s_lambda:.2f})")
+                self.engine._log("STAGE", f"    Game MLE λ: {features.lambda_mle:.2f}")
+                test_type = "Z-test" if profile_res.m_games >= 30 else "T-test"
+                self.engine._log("STAGE", f"    {test_type} Statistic: {profile_res.test_statistic:.2f} (p={profile_res.p_value:.4f})")
+                self.engine._log("STAGE", f"    Critical Limits: 5%={profile_res.critical_05:.2f}, 1%={profile_res.critical_01:.2f}")
+                self.engine._log("STAGE", f"    Result: {profile_res.status} - {profile_res.message}")
         
         if temporal.is_suspicious:
             self.engine._log("STAGE", f"  ⚠️ SUSPICIOUS: Switch-point detected!")

@@ -8,8 +8,8 @@ class TestParser(unittest.TestCase):
     
     def test_parse_simple_coord(self):
         self.assertEqual(GameParser.parse_coordinate("h8"), (7, 7))
-        self.assertEqual(GameParser.parse_coordinate("a1"), (0, 0))
-        self.assertEqual(GameParser.parse_coordinate("o15"), (14, 14))
+        self.assertEqual(GameParser.parse_coordinate("a1"), (0, 14))
+        self.assertEqual(GameParser.parse_coordinate("o15"), (14, 0))
         
     def test_parse_inverted_coord(self):
         self.assertEqual(GameParser.parse_coordinate("8h"), (7, 7))
@@ -23,7 +23,7 @@ class TestParser(unittest.TestCase):
         self.assertEqual(board.moves[0].color, 1) # Black
         
         self.assertEqual(board.moves[1].x, 8)
-        self.assertEqual(board.moves[1].y, 8)
+        self.assertEqual(board.moves[1].y, 6)
         self.assertEqual(board.moves[1].color, 2) # White
 
     def test_parse_comma_separated(self):

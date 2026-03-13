@@ -8,15 +8,15 @@ from src.core.profile_store import ProfileRecord
 @dataclass
 class ProfileResult:
     """Result of a profile analysis comparison."""
-    status: str            # "INSUFFICIENT_DATA", "NORMAL", "SUSPICIOUS"
+    status : str           # "INSUFFICIENT_DATA", "NORMAL", "SUSPICIOUS"
     message: str           # Human-readable explanation
     m_games: int           # Number of games in baseline
-    lambda_bar: Optional[float] = None
-    s_lambda: Optional[float] = None
+    lambda_bar    : Optional[float] = None
+    s_lambda      : Optional[float] = None
     test_statistic: Optional[float] = None  # Z-score or T-score
-    p_value: Optional[float] = None
-    critical_05: Optional[float] = None
-    critical_01: Optional[float] = None
+    p_value       : Optional[float] = None
+    critical_05   : Optional[float] = None
+    critical_01   : Optional[float] = None
 
 
 class ProfileAnalyzer:
@@ -26,7 +26,7 @@ class ProfileAnalyzer:
     """
     
     MIN_GAMES_FOR_ANALYSIS = 2  # Need at least 2 games to compute variance (s_lambda)
-    Z_TEST_THRESHOLD = 30       # m >= 30 uses Z-test, m < 30 uses T-test
+    Z_TEST_THRESHOLD       = 30 # m >= 30 uses Z-test, m < 30 uses T-test
     
     @staticmethod
     def compute_test_statistic(
@@ -47,13 +47,13 @@ class ProfileAnalyzer:
         
         if m >= ProfileAnalyzer.Z_TEST_THRESHOLD:
             # Z-test (normal distribution)
-            p_value = 1.0 - stats.norm.cdf(test_stat)
+            p_value     = 1.0 - stats.norm.cdf(test_stat)
             critical_05 = 1.645 # z_0.05
             critical_01 = 2.326 # z_0.01
         else:
             # T-test (t-distribution with m-1 df)
-            df = m - 1
-            p_value = 1.0 - stats.t.cdf(test_stat, df=df)
+            df          = m - 1
+            p_value     = 1.0 - stats.t.cdf(test_stat, df=df)
             critical_05 = stats.t.ppf(0.95, df=df)
             critical_01 = stats.t.ppf(0.99, df=df)
             
@@ -100,13 +100,13 @@ class ProfileAnalyzer:
             msg = f"Stat={test_stat:.2f} <= crit={crit_05:.2f}. Consistent with baseline."
             
         return ProfileResult(
-            status=status,
-            message=msg,
-            m_games=m,
-            lambda_bar=lambda_bar,
-            s_lambda=s_lambda,
-            test_statistic=test_stat,
-            p_value=p_value,
-            critical_05=crit_05,
-            critical_01=crit_01
+            status         = status,
+            message        = msg,
+            m_games        = m,
+            lambda_bar     = lambda_bar,
+            s_lambda       = s_lambda,
+            test_statistic = test_stat,
+            p_value        = p_value,
+            critical_05    = crit_05,
+            critical_01    = crit_01
         )

@@ -102,7 +102,7 @@ class MainViewModel(QObject):
         self.game_loaded.emit(moves_count)
         self.set_visible_step(moves_count) # Jump to end
         
-    def start_analysis(self):
+    def start_analysis(self, player_name: str = "", save_to_profile: bool = False):
         if not self.current_board:
             return
         
@@ -127,7 +127,13 @@ class MainViewModel(QObject):
             self.thread = None
             
         self.thread = QThread()
-        self.worker = V2AnalysisWorker(self.engine_service, self.current_board, self.config)
+        self.worker = V2AnalysisWorker(
+            self.engine_service, 
+            self.current_board, 
+            self.config,
+            player_name=player_name,
+            save_to_profile=save_to_profile
+        )
         self.worker.moveToThread(self.thread)
         
         self.thread.started.connect(self.worker.run)
