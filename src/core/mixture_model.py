@@ -198,9 +198,9 @@ class MixtureModel:
         pi = max(0.01, min(0.99, pi))
 
         # Update self
-        self.pi = pi
-        self.lambda_good = lam_g
-        self.lambda_blunder = lam_b
+        self.pi             = pi
+        self.lambda_good    = min(lam_g, 1000.0)
+        self.lambda_blunder = max(lam_b, 1.0)
 
         return (pi, lam_g, lam_b)
 

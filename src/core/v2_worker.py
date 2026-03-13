@@ -475,6 +475,18 @@ class V2AnalysisWorker(QObject):
         classification.temperature_score = temp_score
         classification.sensitivity_results = sensitivity
         
+        # V4: LRT Escalation Rule (Paper Section 5.5)
+        if (classification.classification == "Human" and
+            log_lambda > 10.0 and
+            len(move_analyses) >= 10):
+            classification.classification = "Suspicious (LRT-flagged)"
+            classification.lrt_warning = True
+        elif (classification.classification in ["Human", "Suspicious"] and
+              log_lambda > 5.0 and
+              len(move_analyses) >= 10):
+            # Flag but do not escalate classification
+            classification.lrt_warning = True
+        
         # V4: Distribution model comparison (Paper Section 3.2.4)
         # Fit Exponential, Gamma, Weibull and select best by BIC
         dist_fits = []

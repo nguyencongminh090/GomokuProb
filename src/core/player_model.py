@@ -46,6 +46,7 @@ class PlayerClassification:
     
     # V4: Formal hypothesis testing (Paper Section 5.5)
     log_likelihood_ratio: float = 0.0  # log Λ = L1 - L0
+    lrt_warning: bool = False          # Flagged if LRT contradicts classification
     
     # V4: Boltzmann temperature score (Paper Eq. tau_score)
     temperature_score: float = 0.0     # S_τ = 1/τ̂
