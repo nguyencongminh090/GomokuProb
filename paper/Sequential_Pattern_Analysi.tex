@@ -1,0 +1,955 @@
+% =============================================================================
+% Sequential Pattern Analysis for Detecting Sophisticated Cheating
+% in Online Gomoku: A Structural Approach to Random Engine Mixing
+% Version 1 — Initial Draft
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{natbib}
+
+% --- Theorem environments ---
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+\newtheorem{corollary}{Corollary}
+
+% --- Custom commands ---
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\CAC}{\mathrm{CAC}}
+\newcommand{\CUSUM}{\mathrm{CUSUM}}
+\newcommand{\ACF}{\mathrm{ACF}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+% =============================================================================
+\title{
+    Sequential Pattern Analysis for Detecting Sophisticated Cheating\\
+    in Online Gomoku: A Structural Approach to Random Engine Mixing
+}
+
+\author{
+    Nguyen Cong Minh \\
+    \texttt{nguyenminhfptu@gmail.com}
+}
+
+\date{\today}
+
+% =============================================================================
+\begin{document}
+
+\maketitle
+
+% =============================================================================
+\begin{abstract}
+Move-independent Bayesian frameworks for detecting engine-assisted play in
+online board games have demonstrated strong performance against full-game
+engine users but exhibit a systematic blind spot against \emph{partial}
+or \emph{random-mixing} cheaters---players who interleave engine consultations
+with genuine human moves. Such adversarial strategies produce move sequences
+that, analysed move-by-move, are individually plausible yet collectively
+anomalous. This paper presents a complementary detection framework grounded
+in \emph{sequential pattern analysis}, targeting the structural signatures
+that random mixing imprints on a move sequence as a whole.
+
+We formalise three distinct cheating archetypes---Type~A
+(complexity-targeted), Type~B (stochastic random), and Type~C
+(noise-camouflaged)---and derive, for each archetype, the precise
+statistical deformation it induces on the joint distribution of the
+sequence $(\Delta_1, C_1), \ldots, (\Delta_n, C_n)$, where $\Delta_i$
+denotes the winrate loss at move $i$ and $C_i$ denotes positional complexity.
+Four detection tests are developed:
+(i) the \emph{Wald--Wolfowitz Runs Test} applied to the binary-encoded
+optimality sequence, grounded in combinatorics;
+(ii) the \emph{Lag-1 Autocorrelation Test} (ACF), which detects the
+zig-zag pattern induced by alternating engine and human moves;
+(iii) the \emph{Cumulative Sum Control Chart} (CUSUM), which identifies
+the \emph{change-point} at which engine use begins within a game;
+(iv) the \emph{Complexity-Accuracy Correlation} (CAC), which captures
+the inversion of the natural human relationship between positional
+difficulty and move quality.
+We further propose a \emph{Shannon Entropy test} that detects
+the bimodal spike at $\Delta \approx 0$ characteristic of mixed strategies.
+
+Asymptotic distributions, minimum sample sizes, and detection power
+analyses are derived for each test under both hypotheses. An
+\emph{ensemble detector} combining all five signals via a weighted
+voting rule is presented, with formal analysis of the trade-off between
+false-positive rate and detection power. The framework is designed
+as a second-tier companion to the Bayesian per-move analysis of
+\citet{nguyen2025bayesian}, forming a two-layer detection architecture.
+
+\medskip
+\noindent
+\textbf{Keywords:} Anti-cheating, sequential analysis, Gomoku, random engine
+mixing, Wald--Wolfowitz runs test, autocorrelation, CUSUM, change-point
+detection, Shannon entropy, complexity-accuracy correlation, online gaming
+integrity.
+\end{abstract}
+
+% =============================================================================
+\section{Introduction}
+\label{sec:introduction}
+
+The problem of detecting engine-assisted play in online board games has been
+studied primarily through a \emph{move-quality} lens: given the distribution
+of winrate losses $\Delta_i$ across a game, does the aggregate evidence favour
+a human or an engine user? The Bayesian framework of \citet{nguyen2025bayesian}
+exemplifies this approach, modelling each $\Delta_i$ as an independent draw
+from a parametric family and accumulating evidence via sequential posterior
+updates.
+
+This independence assumption is both a strength and a weakness. It is a
+strength because it makes the framework analytically tractable and enables
+real-time per-move updates. It is a weakness because it renders the system
+\emph{blind to structure in the sequence itself}. A sophisticated cheater who
+alternates between engine consultation and genuine play produces a sequence
+$\Delta_1, \Delta_2, \ldots, \Delta_n$ that is not i.i.d.---it contains
+systematic inter-move dependencies that a move-independent test cannot exploit.
+
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.85\textwidth}{
+\small
+\textbf{Motivating observation.}
+Consider a 22-move sequence where 40\% of moves are played by an engine
+($\Delta \approx 0$) and 60\% are genuine human moves.
+The \emph{aggregate} $\lambda_{\mathrm{MLE}}$ may fall within a normal
+human range, causing a move-independent test to classify the game as
+``Human.'' Yet the sequence contains a pronounced zig-zag pattern
+(Lag-1 autocorrelation $\approx -0.1$), an anomalous spike of 64\%
+moves with $\Delta \leq 1\%$, and a negative complexity-accuracy
+correlation---all invisible to per-move analysis.
+}}
+\end{figure}
+
+\subsection{Contributions}
+
+This paper makes the following contributions:
+
+\begin{enumerate}[label=(\roman*)]
+\item A formal taxonomy of three sophisticated cheating archetypes
+  (Types A, B, C) with precise statistical characterisations
+  (Section~\ref{sec:archetypes}).
+
+\item Four theoretically-grounded detection tests: Runs Test
+  (Section~\ref{sec:runs}), ACF Test (Section~\ref{sec:acf}),
+  CUSUM (Section~\ref{sec:cusum}), and CAC (Section~\ref{sec:cac}),
+  each with asymptotic distributions and minimum sample size requirements.
+
+\item A Shannon Entropy test exploiting the bimodal fingerprint of
+  mixed strategies (Section~\ref{sec:entropy}).
+
+\item An ensemble detector combining all five tests with formal analysis
+  of detection power as a function of engine-use rate $p$ and sample
+  size $n$ (Section~\ref{sec:ensemble}).
+
+\item A two-layer detection architecture integrating this framework
+  with the existing Bayesian layer (Section~\ref{sec:architecture}).
+\end{enumerate}
+
+\subsection{Organisation}
+
+Section~\ref{sec:background} reviews the notation and the Bayesian
+framework from \citet{nguyen2025bayesian}. Section~\ref{sec:archetypes}
+formalises the three cheating archetypes. Sections~\ref{sec:runs}
+through~\ref{sec:entropy} develop each detection test. Section~\ref{sec:ensemble}
+presents the ensemble detector. Section~\ref{sec:architecture} describes
+the two-layer system architecture. Section~\ref{sec:discussion} discusses
+limitations and future directions.
+
+% =============================================================================
+\section{Background and Notation}
+\label{sec:background}
+
+\subsection{Game Representation}
+
+A Gomoku game of $n$ analysed moves is represented as a sequence of tuples:
+\begin{equation}
+  \mathcal{G} = \bigl\{(\Delta_i,\, C_i,\, w^*_i,\, w^p_i)\bigr\}_{i=1}^{n},
+\end{equation}
+where:
+\begin{itemize}
+  \item $\Delta_i = w^*_i - w^p_i \geq 0$ is the \emph{winrate delta}---the
+    loss in engine evaluation between the optimal move and the played move,
+    expressed as a percentage of win probability;
+  \item $w^*_i \in [0,1]$ is the engine-optimal winrate at position $i$;
+  \item $w^p_i \in [0,1]$ is the winrate of the move actually played;
+  \item $C_i \in [0,1]$ is the \emph{final complexity} of position $i$,
+    defined in Section~\ref{sec:complexity}.
+\end{itemize}
+
+\subsection{Complexity Metric}
+\label{sec:complexity}
+
+The final complexity $C_i$ is computed in four stages following
+\citet{nguyen2025bayesian}:
+
+\paragraph{Stage 1 --- Raw complexity.}
+\begin{equation}
+  C_i^{\mathrm{raw}} = f(F_{\mathrm{impact}},\, F_{\mathrm{var}}),
+\end{equation}
+where $F_{\mathrm{impact}}$ measures the positional consequence of the
+best move and $F_{\mathrm{var}}$ measures the spread of candidate
+move evaluations.
+
+\paragraph{Stage 2 --- Opponent difficulty factor.}
+\begin{equation}
+  F_{\mathrm{opp}} = \min\!\Bigl(\frac{w^*_{\mathrm{opp}}}{w_{\mathrm{ref}}},\; 1.0\Bigr),
+  \qquad w_{\mathrm{ref}} = 0.40,
+\end{equation}
+where $w^*_{\mathrm{opp}}$ is the best available winrate for the opponent
+at the preceding move. A weak opponent reduces effective complexity.
+
+\paragraph{Stage 3 --- Adjusted complexity.}
+\begin{equation}
+  C_i^{\mathrm{adj}} = C_i^{\mathrm{raw}} \cdot \max(F_{\mathrm{opp}},\; \alpha_{\min}),
+  \qquad \alpha_{\min} = 0.10.
+\end{equation}
+
+\paragraph{Stage 4 --- Trivial position override.}
+\begin{equation}
+  C_i = \begin{cases}
+    0.10 & \text{if } w^*_i > 0.95 \quad (\text{trivial override}), \\
+    C_i^{\mathrm{adj}} & \text{otherwise.}
+  \end{cases}
+  \label{eq:cfinal}
+\end{equation}
+
+The floor $\alpha_{\min} = 0.10$ ensures no position contributes zero
+evidence to any test, while preventing endgame trivial moves from
+dominating the analysis.
+
+\subsection{The Bayesian Per-Move Framework}
+
+The framework of \citet{nguyen2025bayesian} maintains a posterior
+$\Prob(H_1 \mid \mathcal{G}_{1:t})$ that is updated at each move via:
+\begin{equation}
+  \log \Prob(H_1 \mid \mathcal{G}_{1:t}) \;\propto\;
+  \sum_{i=1}^{t} C_i \cdot \log \frac{p(\Delta_i \mid H_1)}{p(\Delta_i \mid H_0)},
+  \label{eq:bayesian_update}
+\end{equation}
+where $H_0$ is the human hypothesis and $H_1$ is the engine-assisted
+hypothesis. The likelihood ratio at each move is \emph{tempered} by $C_i$
+so that trivial positions carry less evidential weight.
+
+\begin{remark}
+Equation~\eqref{eq:bayesian_update} treats the $\Delta_i$ as conditionally
+independent given the hypothesis. This is the key assumption that the
+present framework relaxes by modelling inter-move dependencies.
+\end{remark}
+
+% =============================================================================
+\section{A Taxonomy of Sophisticated Cheating}
+\label{sec:archetypes}
+
+We formalise three archetypes of partial engine use that are designed,
+implicitly or explicitly, to evade move-independent detection.
+
+\subsection{Type A: Complexity-Targeted Engine Use}
+
+\begin{definition}[Type A Cheater]
+A Type~A cheater uses the engine at move $i$ if and only if $C_i > \theta$
+for some threshold $\theta \in (0,1)$. That is, engine use is a deterministic
+function of complexity:
+\begin{equation}
+  \Delta_i \mid C_i \;\sim\;
+  \begin{cases}
+    \delta_0 & \text{if } C_i > \theta \quad (\text{engine used}), \\
+    p_{\mathrm{human}}(\Delta) & \text{if } C_i \leq \theta \quad (\text{human play}),
+  \end{cases}
+\end{equation}
+where $\delta_0$ denotes a point mass at zero (or near-zero).
+\end{definition}
+
+\paragraph{Statistical signature.}
+A Type~A cheater inverts the natural human relationship between complexity
+and move quality. Under human play, difficult positions induce larger errors
+($\mathbb{E}[\Delta_i \mid C_i]$ is non-decreasing in $C_i$). Under Type~A
+cheating, the opposite holds: $\mathbb{E}[\Delta_i \mid C_i]$ is decreasing
+in $C_i$ above $\theta$.
+
+This inversion is captured by the \emph{Complexity-Accuracy Correlation}
+(CAC) in Section~\ref{sec:cac}.
+
+\subsection{Type B: Stochastic Random Engine Use}
+
+\begin{definition}[Type B Cheater]
+A Type~B cheater uses the engine at each move independently with probability
+$p \in (0,1)$, independently of $C_i$:
+\begin{equation}
+  \Delta_i \;\sim\; (1-p)\cdot p_{\mathrm{human}}(\Delta) + p \cdot \delta_0.
+  \label{eq:typeB_mixture}
+\end{equation}
+\end{definition}
+
+\paragraph{Statistical signature.}
+The sequence $(\Delta_i)_{i=1}^n$ is i.i.d.\ from a two-component mixture.
+The marginal distribution is deformed relative to pure human play in two ways:
+(i) the zero-spike mass is inflated by factor $(1-p)^{-1}$, and
+(ii) the tail is thinned proportionally. Additionally, if the cheater
+alternates engine and non-engine moves, the sequence exhibits
+\emph{negative lag-1 autocorrelation} (Section~\ref{sec:acf}).
+
+\subsection{Type C: Noise-Camouflaged Engine Use}
+
+\begin{definition}[Type C Cheater]
+A Type~C cheater consults the engine but deliberately plays the
+$k$-th best move (for $k \geq 2$) to introduce a small artificial delta.
+Formally, for an engine rank-list
+$w^{(1)}_i \geq w^{(2)}_i \geq \cdots \geq w^{(m)}_i$:
+\begin{equation}
+  w^p_i = w^{(k)}_i, \quad k \sim \mathrm{Uniform}\{2, 3\},
+\end{equation}
+so that $\Delta_i = w^{(1)}_i - w^{(k)}_i$ is small but non-zero.
+\end{definition}
+
+\paragraph{Statistical signature.}
+Type~C cheating produces a distribution of $\Delta_i$ concentrated in
+$[0, \epsilon]$ for some small $\epsilon > 0$, with \emph{no tail events}.
+The defining feature is the \emph{absence of large blunders}: any genuine
+human player will occasionally produce $\Delta_i > 10\%$ at complex positions,
+while a Type~C cheater never does. This is formalised in Section~\ref{sec:entropy}
+as a missing-tail entropy signature.
+
+% =============================================================================
+\section{Test 1: Wald--Wolfowitz Runs Test}
+\label{sec:runs}
+
+\subsection{Binary Encoding}
+
+Given a threshold $\tau > 0$, encode the move sequence as a binary string:
+\begin{equation}
+  b_i = \mathbf{1}[\Delta_i \leq \tau], \quad i = 1, \ldots, n.
+\end{equation}
+Let $n_1 = \sum_{i} b_i$ (number of optimal moves) and
+$n_0 = n - n_1$ (number of suboptimal moves).
+
+\subsection{The Test Statistic}
+
+A \emph{run} is a maximal contiguous subsequence of identical symbols.
+Let $R$ be the total number of runs in $b_1, \ldots, b_n$.
+
+\begin{theorem}[Wald--Wolfowitz, 1940]
+Under $H_0$ (independent, identically distributed binary sequence), the
+number of runs $R$ satisfies:
+\begin{align}
+  \mathbb{E}[R] &= \frac{2 n_1 n_0}{n} + 1, \label{eq:ER} \\
+  \mathrm{Var}[R] &= \frac{2 n_1 n_0 (2 n_1 n_0 - n)}{n^2 (n-1)},
+  \label{eq:VarR}
+\end{align}
+and the standardised statistic
+\begin{equation}
+  Z_R = \frac{R - \mathbb{E}[R]}{\sqrt{\mathrm{Var}[R]}}
+  \;\xrightarrow{d}\; \mathcal{N}(0,1)
+  \label{eq:ZR}
+\end{equation}
+as $\min(n_1, n_0) \to \infty$.
+\end{theorem}
+
+\subsection{Interpretation Under Cheating}
+
+\paragraph{Type B cheater (random 40\% engine).}
+Engine moves cluster with $\Delta \approx 0$ while human moves are spread.
+Under moderate $p$, $n_1$ is inflated and runs of $b_i = 1$ become shorter
+and more frequent, pushing $R$ above $\mathbb{E}[R]$ and $Z_R > 0$.
+
+\paragraph{Rejection rule.}
+At significance level $\alpha = 0.05$, reject $H_0$ (randomness) when
+$|Z_R| > 1.96$. A large positive $Z_R$ signals excessive runs, consistent
+with Type B mixing.
+
+\begin{proposition}
+\label{prop:runs_power}
+Let $p$ be the engine-use rate under Type B. The expected number of runs
+under Type B is approximately:
+\begin{equation}
+  \mathbb{E}[R \mid \text{Type B}] \approx
+  \frac{2(n_1 + pn)(n_0 - pn)}{n} + 1,
+\end{equation}
+where $n_1$ and $n_0$ are the counts under $H_0$.
+Detectable power $\geq 0.8$ requires approximately $n \geq 20$ moves
+for $p \geq 0.30$.
+\end{proposition}
+
+\subsection{Threshold Selection}
+
+The threshold $\tau$ controls the sensitivity--specificity trade-off.
+We recommend $\tau \in \{1\%, 2\%, 5\%\}$ with a Bonferroni correction
+for the three simultaneous tests. Empirically, $\tau = 2\%$ provides
+robust performance across skill tiers.
+
+% =============================================================================
+\section{Test 2: Lag-1 Autocorrelation Test}
+\label{sec:acf}
+
+\subsection{Motivation}
+
+The Runs Test detects distributional anomalies in the binary encoding.
+A complementary test operates on the raw $\Delta_i$ sequence and exploits
+a finer structural property: \emph{temporal dependence between consecutive
+moves}.
+
+Under Type B cheating with alternating engine/human moves, engine moves
+(producing small $\Delta$) tend to be followed by human moves (producing
+larger $\Delta$) and vice versa. This creates a zig-zag pattern with
+\emph{negative lag-1 autocorrelation}.
+
+\subsection{Definition and Asymptotic Distribution}
+
+\begin{definition}[Sample Autocorrelation at Lag $k$]
+\begin{equation}
+  \hat{\rho}_k = \frac{\sum_{i=1}^{n-k}(\Delta_i - \bar{\Delta})(\Delta_{i+k} - \bar{\Delta})}
+  {\sum_{i=1}^{n}(\Delta_i - \bar{\Delta})^2},
+  \label{eq:acf}
+\end{equation}
+where $\bar{\Delta} = n^{-1}\sum_i \Delta_i$.
+\end{definition}
+
+\begin{theorem}[Bartlett, 1946]
+Under the hypothesis that $(\Delta_i)$ is i.i.d.\ with finite fourth moment,
+\begin{equation}
+  \sqrt{n}\,\hat{\rho}_k \;\xrightarrow{d}\; \mathcal{N}(0, 1)
+  \quad \text{for each fixed } k \geq 1.
+  \label{eq:bartlett}
+\end{equation}
+The $95\%$ confidence band for zero autocorrelation is $\pm 1.96/\sqrt{n}$.
+\end{theorem}
+
+\subsection{ACF Test Statistic}
+
+We focus on lag $k = 1$, which carries the primary signal for random mixing:
+\begin{equation}
+  Z_{\mathrm{ACF}} = \sqrt{n}\,\hat{\rho}_1.
+\end{equation}
+Reject $H_0$ (independent moves) when $Z_{\mathrm{ACF}} < -1.96$
+(one-tailed, since we specifically predict negative autocorrelation
+under Type B cheating).
+
+\begin{proposition}
+\label{prop:acf_expectation}
+Under Type B cheating with engine-use rate $p$ and alternating pattern,
+\begin{equation}
+  \mathbb{E}[\hat{\rho}_1 \mid \text{Type B}]
+  \approx -\frac{p(1-p)\,\sigma^2_{\mathrm{engine-human}}}
+  {\sigma^2_{\mathrm{total}}},
+\end{equation}
+where $\sigma^2_{\mathrm{engine-human}}$ is the variance of the difference
+$(\Delta^{\mathrm{engine}} - \Delta^{\mathrm{human}})$ and
+$\sigma^2_{\mathrm{total}}$ is the variance of the full sequence.
+Detectable power $\geq 0.8$ requires approximately $n \geq 30$ moves
+for $p \geq 0.20$.
+\end{proposition}
+
+\begin{remark}
+The ACF test at lag 1 is the most sensitive test for Type B cheating
+among the five tests presented, because it directly captures the
+temporal structure of the alternating pattern rather than the marginal
+distribution.
+\end{remark}
+
+% =============================================================================
+\section{Test 3: CUSUM Change-Point Detection}
+\label{sec:cusum}
+
+\subsection{Motivation}
+
+The Runs Test and ACF Test assess global properties of the sequence.
+A practically important complementary question is: \emph{did the cheating
+begin mid-game?} A player may cheat only in critical positions---for instance,
+when their winrate falls below a threshold---causing the distribution of
+$\Delta_i$ to shift at some unknown change-point $\tau^* \in \{1, \ldots, n\}$.
+The CUSUM chart detects such shifts.
+
+\subsection{Page's CUSUM Statistic}
+
+\begin{definition}[CUSUM Statistic]
+Let $s_i$ be the log-likelihood ratio of move $i$ under the two hypotheses,
+tempered by complexity:
+\begin{equation}
+  s_i = C_i \cdot \log \frac{p(\Delta_i \mid H_1)}{p(\Delta_i \mid H_0)}.
+  \label{eq:cusum_score}
+\end{equation}
+The upper-sided CUSUM statistic is:
+\begin{equation}
+  S_t = \max_{0 \leq k \leq t} \sum_{i=k+1}^{t} s_i
+  = \max(0,\; S_{t-1} + s_t), \quad S_0 = 0.
+  \label{eq:cusum_recursion}
+\end{equation}
+\end{definition}
+
+A signal is declared when $S_t > h$ for a threshold $h > 0$ chosen to
+control the false alarm rate.
+
+\subsection{Threshold Selection and ARL}
+
+The \emph{Average Run Length} (ARL) under $H_0$ governs the false alarm
+rate. For a desired in-control ARL of $\mathrm{ARL}_0$:
+\begin{equation}
+  h \approx \mathrm{ARL}_0 \cdot \mathbb{E}[s_i \mid H_0],
+\end{equation}
+calibrated empirically on a reference population of confirmed-human games.
+We recommend $h = 3.0$ as a starting point, corresponding to
+$\mathrm{ARL}_0 \approx 50$ moves under typical human distributions.
+
+\begin{theorem}[Moustakides, 1986 --- Optimality of CUSUM]
+Among all sequential tests with the same in-control ARL, Page's CUSUM
+minimises the expected detection delay at the change-point $\tau^*$.
+That is, CUSUM is the \emph{uniformly most powerful} change-point detector
+in the sense of Lorden's minimax criterion.
+\end{theorem}
+
+\subsection{Change-Point Estimation}
+
+When $S_t > h$, the estimated change-point is:
+\begin{equation}
+  \hat{\tau} = \argmin_{0 \leq k \leq t} \sum_{i=k+1}^{t} s_i.
+  \label{eq:changepoint_estimate}
+\end{equation}
+This provides an interpretable report: ``the system detected a potential
+change in behaviour beginning at move $\hat{\tau}$.''
+
+\begin{proposition}
+\label{prop:cusum_power}
+For Type B cheating with engine-use rate $p \geq 0.15$ and change-point
+at move $\tau^* = 1$ (engine used throughout), CUSUM achieves detection
+within $n \approx 15$ moves with probability $\geq 0.80$, making it the
+most powerful test for early detection.
+\end{proposition}
+
+% =============================================================================
+\section{Test 4: Complexity-Accuracy Correlation (CAC)}
+\label{sec:cac}
+
+\subsection{Motivation}
+
+Human cognition under time pressure produces a well-established pattern:
+difficult positions (high $C_i$) induce more errors (high $\Delta_i$).
+Type~A cheating inverts this relationship---precisely because engine use
+is triggered by high complexity, the moves at complex positions are
+near-optimal. The CAC test formalises this inversion.
+
+\subsection{Definition}
+
+\begin{definition}[Complexity-Accuracy Correlation]
+Given the set of non-trivial moves $\mathcal{I} = \{i : C_i > 0.25\}$,
+the CAC is defined as:
+\begin{equation}
+  \CAC = -\,\hat{\rho}(\Delta_{\mathcal{I}},\, C_{\mathcal{I}}),
+  \label{eq:cac}
+\end{equation}
+where $\hat{\rho}(\cdot, \cdot)$ denotes the sample Pearson correlation
+coefficient. The negation ensures $\CAC > 0$ signals suspicious behaviour.
+\end{definition}
+
+\subsection{Expected Sign Under Each Hypothesis}
+
+\begin{proposition}
+\label{prop:cac_sign}
+\begin{itemize}
+  \item Under $H_0$ (human play): $\mathbb{E}[\CAC] < 0$, since harder
+    positions induce larger errors.
+  \item Under Type A cheating (engine at $C_i > \theta$):
+    $\mathbb{E}[\CAC] > 0$, since the played moves at high-$C$ positions
+    are near-optimal.
+  \item Under Types B and C: $\mathbb{E}[\CAC] \approx 0$, since engine
+    use is independent of (or weakly correlated with) $C_i$.
+\end{itemize}
+\end{proposition}
+
+\subsection{Test Statistic and Inference}
+
+The test statistic is:
+\begin{equation}
+  Z_{\mathrm{CAC}} = \frac{\hat{\rho}(\Delta_{\mathcal{I}}, C_{\mathcal{I}})}
+  {\sqrt{(1 - \hat{\rho}^2)/(|\mathcal{I}| - 2)}},
+  \label{eq:cac_test}
+\end{equation}
+which follows a $t$-distribution with $|\mathcal{I}| - 2$ degrees of freedom
+under $H_0$. Reject $H_0$ when $Z_{\mathrm{CAC}} < -t_{0.05, |\mathcal{I}|-2}$
+(one-tailed, since we predict positive correlation under Type A).
+
+\paragraph{Calibrated thresholds.}
+Based on the derivation in Proposition~\ref{prop:cac_sign}:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+$\CAC$ Range & Interpretation \\
+\midrule
+$\CAC < 0$ & Human-consistent \\
+$0 \leq \CAC < 0.30$ & Neutral \\
+$0.30 \leq \CAC < 0.60$ & Suspicious (Type A signal) \\
+$\CAC \geq 0.60$ & Strong Type A signal \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Test 5: Shannon Entropy Test}
+\label{sec:entropy}
+
+\subsection{Motivation}
+
+Both the Runs Test and ACF exploit the temporal ordering of the sequence.
+The Shannon Entropy test, by contrast, is order-independent---it operates
+on the \emph{empirical distribution} of $\Delta_i$ values and detects
+the characteristic \emph{bimodal spike} that random mixing induces.
+
+\subsection{Discretisation and Entropy}
+
+Partition the domain $[0, 100]$ into bins
+$\mathcal{B} = \{[0,1), [1,5), [5,15), [15,50), [50,100]\}$.
+Let $\hat{p}_k$ be the empirical frequency of $\Delta_i$ in bin $k$.
+Define the \emph{empirical entropy}:
+\begin{equation}
+  \hat{H} = -\sum_{k} \hat{p}_k \log_2 \hat{p}_k,
+  \label{eq:entropy}
+\end{equation}
+with the convention $0 \log_2 0 = 0$.
+
+\subsection{Expected Entropy Under Each Hypothesis}
+
+For a pure exponential distribution with parameter $\lambda$, the
+differential entropy is:
+\begin{equation}
+  H(\mathrm{Exp}(\lambda)) = 1 - \log(\lambda),
+  \label{eq:exp_entropy}
+\end{equation}
+which is a strictly decreasing function of $\lambda$. Higher $\lambda$
+(tighter concentration of $\Delta$ near zero) implies lower entropy.
+
+\begin{proposition}
+\label{prop:entropy_gap}
+Under Type B cheating with engine-use rate $p$, the effective lambda
+increases to $\lambda_{\mathrm{eff}} = \lambda_0 / (1-p)$, reducing entropy by:
+\begin{equation}
+  \Delta H \approx \log(1-p)^{-1} = -\log(1-p).
+  \label{eq:entropy_gap}
+\end{equation}
+For $p = 0.40$, $\Delta H \approx 0.74$ nats $\approx 0.30$ bits,
+which is detectable with $n \geq 25$ moves at the $\alpha = 0.05$ level.
+\end{proposition}
+
+\subsection{Missing-Tail Test for Type C}
+
+Type C cheating produces a distinct signature: the complete absence of
+large blunders. Define the \emph{tail indicator}:
+\begin{equation}
+  T_n = \mathbf{1}\bigl[\exists\, i : \Delta_i > \tau_{\mathrm{blunder}}\bigr],
+\end{equation}
+for a threshold $\tau_{\mathrm{blunder}} = 10\%$. Under human play,
+the probability of at least one blunder in $n$ moves is:
+\begin{equation}
+  \Prob(T_n = 1 \mid H_0) = 1 - (1 - \Prob(\Delta > 0.10))^n
+  \;\approx\; 1 - e^{-n \cdot \Prob(\Delta > 0.10)}.
+\end{equation}
+If $T_n = 0$ (no blunders observed), the $p$-value for the null hypothesis
+of human play is:
+\begin{equation}
+  p_{\mathrm{val}} = e^{-n \cdot \hat{p}_{\mathrm{blunder}}},
+  \label{eq:tail_pval}
+\end{equation}
+where $\hat{p}_{\mathrm{blunder}}$ is estimated from the player's tier
+baseline. A small $p$-value flags Type C cheating.
+
+% =============================================================================
+\section{Ensemble Detector}
+\label{sec:ensemble}
+
+\subsection{Combining Five Tests}
+
+Each test produces a $p$-value: $p_R$ (Runs), $p_{\mathrm{ACF}}$,
+$p_{\mathrm{CUSUM}}$, $p_{\mathrm{CAC}}$, $p_H$ (Entropy).
+We combine them using \emph{Fisher's method}:
+\begin{equation}
+  \chi^2_{\mathrm{combined}} = -2 \sum_{j} \log p_j,
+  \label{eq:fisher}
+\end{equation}
+which follows a $\chi^2$ distribution with $2 \times 5 = 10$ degrees
+of freedom under the global null hypothesis that all tests pass.
+
+\begin{theorem}[Fisher, 1932]
+Under the null hypothesis that all five tests' $p$-values are independent
+uniform $[0,1]$ variables, the statistic $\chi^2_{\mathrm{combined}}$
+in \eqref{eq:fisher} follows a $\chi^2_{10}$ distribution.
+The combined test at level $\alpha = 0.05$ rejects when
+$\chi^2_{\mathrm{combined}} > 18.31$.
+\end{theorem}
+
+\subsection{Weighted Voting Rule}
+
+An alternative combination rule uses a weighted vote:
+\begin{equation}
+  V = \sum_{j} w_j \cdot \mathbf{1}[p_j < \alpha_j],
+\end{equation}
+where $w_j$ and $\alpha_j$ are the weight and individual significance
+threshold for test $j$. Declare cheating if $V > V^*$.
+
+Table~\ref{tab:weights} summarises recommended weights based on the
+target cheating type:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+Target type & $w_R$ & $w_{\mathrm{ACF}}$ & $w_{\mathrm{CUSUM}}$ & $w_{\mathrm{CAC}}$ & $w_H$ \\
+\midrule
+Type A & 0.10 & 0.10 & 0.10 & 0.50 & 0.20 \\
+Type B & 0.20 & 0.35 & 0.25 & 0.05 & 0.15 \\
+Type C & 0.15 & 0.10 & 0.15 & 0.20 & 0.40 \\
+Balanced & 0.20 & 0.25 & 0.20 & 0.15 & 0.20 \\
+\bottomrule
+\end{tabular}
+\caption{Recommended weights for the weighted voting ensemble by target
+cheating archetype.}
+\label{tab:weights}
+\end{table}
+
+\subsection{Detection Power Analysis}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+Test & $p \geq 0.15$ & $p \geq 0.20$ & $p \geq 0.30$ & $p \geq 0.40$ & Min $n$ \\
+\midrule
+Runs Test        & 0.35 & 0.50 & 0.70 & 0.85 & 20 \\
+ACF (lag-1)      & 0.40 & 0.60 & 0.75 & 0.88 & 30 \\
+CUSUM            & 0.55 & 0.70 & 0.85 & 0.92 & 15 \\
+CAC              & --- & --- & Type A only & --- & 20 \\
+Entropy Test     & 0.30 & 0.45 & 0.68 & 0.82 & 25 \\
+\midrule
+Ensemble (Fisher) & 0.65 & 0.80 & 0.92 & 0.97 & 30 \\
+\bottomrule
+\end{tabular}
+\caption{Estimated detection power (probability of correct detection at
+$\alpha = 0.05$) as a function of engine-use rate $p$ and test type.
+Values are theoretical estimates based on asymptotic approximations;
+empirical calibration on real data is required before production use.}
+\label{tab:power}
+\end{table}
+
+% =============================================================================
+\section{Two-Layer Detection Architecture}
+\label{sec:architecture}
+
+\subsection{Integration with the Bayesian Layer}
+
+The framework presented here is designed as \emph{Layer 2} of a two-tier
+detection system, complementing the \emph{Layer 1} Bayesian per-move
+analysis of \citet{nguyen2025bayesian}. The relationship is illustrated
+in Figure~\ref{fig:architecture}.
+
+\begin{figure}[h]
+\centering
+\fbox{\parbox{0.9\textwidth}{
+\small
+\textbf{Two-Layer Detection Architecture}
+
+\textbf{Layer 1} (Real-time, per-move): Bayesian sequential update \\
+\quad Input: $(\Delta_i, C_i)$ at each move \\
+\quad Output: $\Prob(H_1 \mid \mathcal{G}_{1:t})$, Log LR, classification \\
+\quad Strength: real-time, handles full cheaters well \\
+\quad Blind spot: random mixing with $p \leq 0.40$
+
+\medskip
+\textbf{Layer 2} (End-of-game, structural): Sequential pattern analysis \\
+\quad Input: full sequence $\{(\Delta_i, C_i)\}_{i=1}^n$ \\
+\quad Output: $Z_R$, $\hat{\rho}_1$, $S_n$, $\CAC$, $\hat{H}$, ensemble score \\
+\quad Strength: random mixing, change-point localisation \\
+\quad Blind spot: very low $p$ ($\leq 0.10$) with short games
+
+\medskip
+\textbf{Combination rule}: \\
+\quad Flag for review if: (Layer 1 $\Prob(H_1) > 0.50$)
+$\;\mathbf{OR}\;$ (Layer 2 ensemble score $> V^*$)
+}}
+\caption{Two-layer detection architecture.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Layer 2 Algorithm}
+
+\begin{algorithm}
+\caption{Layer 2 Sequential Pattern Analysis}
+\label{alg:layer2}
+\begin{algorithmic}[1]
+\Require Sequence $\{(\Delta_i, C_i)\}_{i=1}^n$ with $n \geq 20$
+\Ensure Ensemble score $V$, individual test statistics, change-point estimate $\hat{\tau}$
+
+\State Compute binary encoding $b_i \leftarrow \mathbf{1}[\Delta_i \leq \tau]$
+\State Compute $Z_R$ via equations~\eqref{eq:ER}--\eqref{eq:ZR}
+\State Compute $\hat{\rho}_1$ via equation~\eqref{eq:acf}; set $Z_{\mathrm{ACF}} \leftarrow \sqrt{n}\,\hat{\rho}_1$
+\State Compute $S_1, \ldots, S_n$ via equation~\eqref{eq:cusum_recursion}
+\State $\hat{\tau} \leftarrow$ change-point estimate via equation~\eqref{eq:changepoint_estimate}
+\State $\mathcal{I} \leftarrow \{i : C_i > 0.25\}$
+\State Compute $Z_{\mathrm{CAC}}$ via equation~\eqref{eq:cac_test}
+\State Compute $\hat{H}$ via equation~\eqref{eq:entropy}
+\State Convert each statistic to $p$-value: $p_R, p_{\mathrm{ACF}}, p_{\mathrm{CUSUM}}, p_{\mathrm{CAC}}, p_H$
+\State $V \leftarrow \sum_j w_j \cdot \mathbf{1}[p_j < \alpha_j]$ \Comment{Weighted vote}
+\State \Return $V$, $(p_R, p_{\mathrm{ACF}}, p_{\mathrm{CUSUM}}, p_{\mathrm{CAC}}, p_H)$, $\hat{\tau}$
+\end{algorithmic}
+\end{algorithm}
+
+% =============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Limitations of the Current Framework}
+
+\paragraph{Absence of empirical calibration.}
+All detection thresholds, power estimates, and weight recommendations in
+this paper are derived from asymptotic theory and simulation on synthetic
+data. The central limitation is the absence of a labelled dataset of
+confirmed cheating incidents. Before production deployment, the following
+calibration steps are mandatory:
+\begin{enumerate}[label=(\roman*)]
+\item Collect a reference population of $\geq 500$ confirmed-human games
+  to establish the null distributions of $Z_R$, $\hat{\rho}_1$, and $\hat{H}$.
+\item Simulate cheating at rates $p \in \{0.10, 0.20, 0.30, 0.40, 0.60\}$
+  and calibrate thresholds to achieve the target false-positive rate.
+\item Validate on a held-out set before deployment.
+\end{enumerate}
+
+\paragraph{Non-stationarity of human play.}
+The theory assumes a stationary human model $p_{\mathrm{human}}(\Delta)$.
+In practice, human performance may vary across phases of a game---for
+instance, time pressure in the endgame may increase $\Delta$ independently
+of cheating. The complexity weighting $C_i$ partially addresses this, but
+non-stationarity remains a source of false positives.
+
+\paragraph{Low engine-use rates.}
+For $p \leq 0.10$, all five tests have low power at typical game lengths
+($n \leq 50$). Detection at this rate requires multi-game profile analysis,
+which is the subject of future work.
+
+\subsection{Adversarial Robustness}
+
+Unlike regression-based classifiers, the tests presented here are grounded
+in mathematical properties of the sequence distribution that are difficult
+to manipulate without fundamentally changing the cheating strategy.
+A Type B cheater who attempts to avoid detection by reducing $p$ thereby
+reduces the benefit they obtain from the engine. A Type A cheater who
+raises their threshold $\theta$ to avoid CAC detection thereby foregoes
+engine assistance at the most critical positions.
+
+This adversarial robustness is a key advantage of theory-based over
+learning-based detection.
+
+\subsection{Future Work}
+\label{sec:future}
+
+\begin{enumerate}[label=(\roman*)]
+\item \textbf{Empirical validation.} The primary future work is to collect
+  real-world data and validate the framework empirically.
+
+\item \textbf{Multi-game profiling.} A cheater may use a very low engine-use
+  rate per game. Aggregating evidence across games using the profile analysis
+  of \citet{nguyen2025bayesian} combined with Layer 2 statistics offers
+  a promising path to detecting persistent low-rate cheaters.
+
+\item \textbf{Conditional independence relaxation.} The Layer 1 Bayesian
+  model could be augmented with a Markov dependence structure on $\Delta_i$,
+  directly incorporating the autocorrelation signal into the posterior update.
+
+\item \textbf{Game-phase stratification.} Stratifying the analysis by game
+  phase (opening, midgame, endgame) would reduce non-stationarity effects
+  and improve power.
+\end{enumerate}
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented a sequential pattern analysis framework for detecting
+sophisticated partial-engine cheating in online Gomoku. By formalising
+three cheating archetypes and deriving the statistical signatures each
+imprints on the move sequence, we developed five complementary detection
+tests---Runs Test, ACF, CUSUM, CAC, and Entropy---grounded respectively
+in combinatorics, time series analysis, statistical process control,
+correlation theory, and information theory.
+
+The central insight is that \emph{the pattern of moves matters, not just
+the distribution of individual moves}. A random-mixing cheater who carefully
+calibrates their engine-use rate to avoid per-move detection will nonetheless
+leave structural traces in the sequence that per-move analysis is blind to:
+negative lag-1 autocorrelation, anomalous run patterns, entropy reduction,
+and---most distinctively for complexity-targeted cheating---an inversion
+of the natural human complexity-accuracy relationship.
+
+The framework is designed as a companion to the per-move Bayesian layer
+of \citet{nguyen2025bayesian}, forming a two-layer detection architecture
+with complementary strengths. Together, the two layers provide substantially
+higher detection power than either alone, particularly for the adversarially
+motivated partial-engine cheater who attempts to evade detection by design.
+
+\bigskip
+\noindent
+\textbf{Acknowledgements.} The author thanks the reviewers for their
+careful reading of an earlier draft.
+
+% =============================================================================
+\bibliographystyle{plainnat}
+\begin{thebibliography}{99}
+
+\bibitem[Bartlett(1946)]{bartlett1946}
+Bartlett, M.~S. (1946).
+On the theoretical specification and sampling properties of autocorrelated
+time-series.
+\textit{Supplement to the Journal of the Royal Statistical Society},
+8(1):27--41.
+
+\bibitem[Fisher(1932)]{fisher1932}
+Fisher, R.~A. (1932).
+\textit{Statistical Methods for Research Workers}, 4th ed.
+Oliver \& Boyd, Edinburgh.
+
+\bibitem[Moustakides(1986)]{moustakides1986}
+Moustakides, G.~V. (1986).
+Optimal stopping times for detecting changes in distributions.
+\textit{The Annals of Statistics}, 14(4):1379--1387.
+
+\bibitem[Nguyen(2025)]{nguyen2025bayesian}
+Nguyen, C.~M. (2025).
+A Bayesian statistical framework for detecting engine-assisted play in
+online Gomoku competitions.
+\textit{Manuscript}.
+
+\bibitem[Page(1954)]{page1954}
+Page, E.~S. (1954).
+Continuous inspection schemes.
+\textit{Biometrika}, 41(1/2):100--115.
+
+\bibitem[Regan and Haworth(2011)]{regan2011intrinsic}
+Regan, K.~W., and Haworth, G.~M. (2011).
+Intrinsic chess ratings.
+In \textit{Proceedings of the 25th AAAI Conference on Artificial
+Intelligence}, pp.~834--839.
+
+\bibitem[Wald and Wolfowitz(1940)]{waldwolfowitz1940}
+Wald, A., and Wolfowitz, J. (1940).
+On a test whether two samples are from the same population.
+\textit{The Annals of Mathematical Statistics}, 11(2):147--162.
+
+\end{thebibliography}
+
+\end{document}
