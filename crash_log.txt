@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/media/ngmint/Data/Programming/Python/Personal/GomokuProb/src/core/v2_worker.py", line 207, in run
+    move = self.board.moves[i]
+           ~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range

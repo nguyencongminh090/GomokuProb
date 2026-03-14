@@ -396,39 +396,11 @@ class EngineService(QObject):
         Get static evaluation and pattern data from engine.
         Returns: { 'static_eval': int, 'patterns': {'black': [[...]], 'white': [[...]]}, ... }
         """
-        import json
         client = self.client
         if not client:
-            raise RuntimeError("Engine not started")
+            return {}
             
-        self._set_state(EngineState.ANALYZING)
-        try:
-            # Setup board but DO NOT start search (YXBOARD)
-            self._setup_board_yx(board.moves)
-            
-            # Request static JSON
-            client.send_raw("YXSTATICJSON")
-            
-            # Read response directly from process stdout
-            try:
-                # We expect exactly one line of JSON
-                line = client._process.stdout.readline()
-                if not line:
-                    return {}
-                    
-                line = line.strip()
-                self._log("CMD", f"YXSTATICJSON Response: {line[:50]}...")
-                
-                if line.startswith("{"):
-                    return json.loads(line)
-                else:
-                    self._log("ERROR", f"Unexpected YXSTATICJSON output: {line}")
-                    return {}
-            except Exception as e:
-                self._log("ERROR", f"Failed to read/parse YXSTATICJSON: {e}")
-                return {}
-                
-        finally:
-            self._set_state(EngineState.IDLE)
-            
+        # Due to a PyGomo threading conflict, reading stdout directly for YXSTATICJSON
+        # causes the engine process pipe to crash randomly on the subsequent YXBOARD command.
+        # Until PyGomo implements a native execute_json() method, we bypass pattern detection.
         return {}

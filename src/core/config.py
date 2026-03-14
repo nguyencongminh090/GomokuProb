@@ -39,6 +39,12 @@ class AnalysisConfig:
     enable_model_selection: bool = True  # Run Gamma/Weibull comparison (AIC/BIC)
     enable_em_fitting: bool = True       # Fit mixture parameters via EM
     
+    # LLM Report Generation Settings
+    llm_provider: str = "gemini"         # e.g., "gemini", "groq", or "openai"
+    llm_model: str = "gemini-2.5-flash"
+    llm_api_key: str = "AIzaSyC4AukNo7Xm5lYEGnK5dA3g-qrF-XCMX1c"
+    llm_endpoint_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    
     @property
     def rule_name(self) -> str:
         rules = {0: "Freestyle", 1: "Standard", 4: "Renju"}

@@ -139,12 +139,18 @@ class MainWindow(QMainWindow):
         self.btn_analyze = QPushButton("Start Analysis") # Text will toggle
         self.btn_analyze.setEnabled(False) # Disable until loaded
         
+        self.btn_llm = QPushButton("🧠 Generate LLM Verdict")
+        self.btn_llm.setToolTip("Uses Cloud AI to generate a text summary of this analysis")
+        self.btn_llm.setEnabled(False)
+        self.btn_llm.setStyleSheet("font-weight: bold; color: #1e88e5;")
+        
         controls_layout.addWidget(self.btn_load)
         controls_layout.addWidget(self.btn_settings)
         controls_layout.addWidget(self.btn_db_viewer)
         controls_layout.addWidget(self.player_input)
         controls_layout.addWidget(self.chk_save_profile)
         controls_layout.addWidget(self.btn_analyze)
+        controls_layout.addWidget(self.btn_llm)
         analysis_layout.addLayout(controls_layout)
         
         # 3. Tabs: Report & Console
@@ -184,6 +190,7 @@ class MainWindow(QMainWindow):
         self.btn_settings.clicked.connect(self.open_settings)
         self.btn_db_viewer.clicked.connect(self.open_db_viewer)
         self.btn_analyze.clicked.connect(self.toggle_analysis)
+        self.btn_llm.clicked.connect(self.view_model.generate_llm_report)
         
         self.btn_first.clicked.connect(self.view_model.step_first)
         self.btn_prev.clicked.connect(self.view_model.step_prev)
@@ -198,6 +205,7 @@ class MainWindow(QMainWindow):
         
         self.view_model.visible_step_changed.connect(self.on_visible_step_changed)
         self.view_model.analysis_progress.connect(self.on_analysis_progress)
+        self.view_model.llm_report_generated.connect(self.log_llm_report)
         
         # Graph -> Board (Blunder Visualization)
         self.graph_widget.blunders_detected.connect(self.board_widget.set_blunders)
@@ -285,6 +293,7 @@ class MainWindow(QMainWindow):
             self.btn_db_viewer.setEnabled(False)
             self.player_input.setEnabled(False)
             self.chk_save_profile.setEnabled(False)
+            self.btn_llm.setEnabled(False)
             
             # Clear logs only on new start? 
             # Ideally ViewModel controls when to clear, but UI logic is fine here.
@@ -299,6 +308,7 @@ class MainWindow(QMainWindow):
         elif state == SystemState.STOPPING:
             self.btn_analyze.setText("Stopping...")
             self.btn_analyze.setEnabled(False) # Prevent double click
+            self.btn_llm.setEnabled(False)
             self.log("Stopping analysis...")
             
         elif state == SystemState.IDLE:
@@ -309,6 +319,7 @@ class MainWindow(QMainWindow):
             self.btn_db_viewer.setEnabled(True)
             self.player_input.setEnabled(True)
             self.chk_save_profile.setEnabled(True)
+            self.btn_llm.setEnabled(self.view_model.last_game_result is not None)
             self.log("Analysis finished/stopped.")
             self.progress_bar.setVisible(False)
             
@@ -417,3 +428,16 @@ class MainWindow(QMainWindow):
         # Also write to file
         self._write_to_log_file("REPORT", message)
         self.log_area.append(message)
+        
+    def log_llm_report(self, message):
+        """Specially handles rendering the LLM text output as Markdown for the UI."""
+        self._write_to_log_file("REPORT", message)
+        
+        try:
+            import markdown
+            # Make sure to preserve newlines and convert to strict HTML
+            html = markdown.markdown(message, extensions=['nl2br'])
+            self.log_area.append(f"<br/><b>🧠 LLM VERDICT:</b><br/>{html}<br/>")
+        except ImportError:
+            # Fallback if markdown library isn't installed
+            self.log_area.append(message)

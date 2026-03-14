@@ -200,7 +200,11 @@ class V2AnalysisWorker(QObject):
                 )
         # Setup board state
         current_board = BoardState(self.board.size)
-        start_idx = max(0, self.config.start_move - 1)
+        
+        # Determine the maximum safe index to start at based on the board length.
+        # start_move is 1-indexed in the UI (e.g. "Start at move 1").
+        requested_start_idx = max(0, self.config.start_move - 1)
+        start_idx = min(requested_start_idx, max(0, total_moves - 1)) if total_moves > 0 else 0
         
         # Pre-fill board
         for i in range(start_idx):
@@ -259,36 +263,40 @@ class V2AnalysisWorker(QObject):
                 if pattern_ctx:
                     self.engine._log("STAGE", f"  Pattern Context: Own={pattern_ctx['own_desc']} | Opp={pattern_ctx['opp_desc']}")
                 
-                # Get candidates from engine
-                candidates = self.engine.analyze(
-                    current_board, 
-                    top_n=5,
-                    time_limit=time_limit_sec,
-                    node_limit=self.config.node_limit
-                )
-                
-                # Find best move
-                best_eval = max(candidates, key=lambda x: x.winrate) if candidates else None
-                best_wr = best_eval.winrate if best_eval else 0.5
-                
-                # Find played move evaluation
-                played_eval = None
-                move_wins = current_board.check_win_after_move(move.x, move.y, move.color) == move.color
-                
-                if move_wins:
-                    played_eval = MoveEvaluation(move.notation, 1.0, is_best=True)
-                else:
-                    # Search in candidates
-                    for c in candidates:
-                        if c.move_notation.lower() == move.notation.lower():
-                            played_eval = c
-                            break
+                try:
+                    # Get candidates from engine
+                    candidates = self.engine.analyze(
+                        current_board, 
+                        top_n=5,
+                        time_limit=time_limit_sec,
+                        node_limit=self.config.node_limit
+                    )
                     
-                    if not played_eval:
-                        # Evaluate separately
-                        played_eval = self.engine.evaluate_move(
-                            current_board, move, time_limit=time_limit_sec
-                        )
+                    # Find best move
+                    best_eval = max(candidates, key=lambda x: x.winrate) if candidates else None
+                    best_wr = best_eval.winrate if best_eval else 0.5
+                    
+                    # Find played move evaluation
+                    played_eval = None
+                    move_wins = current_board.check_win_after_move(move.x, move.y, move.color) == move.color
+                    
+                    if move_wins:
+                        played_eval = MoveEvaluation(move.notation, 1.0, is_best=True)
+                    else:
+                        # Search in candidates
+                        for c in candidates:
+                            if c.move_notation.lower() == move.notation.lower():
+                                played_eval = c
+                                break
+                        
+                        if not played_eval:
+                            # Evaluate separately
+                            played_eval = self.engine.evaluate_move(
+                                current_board, move, time_limit=time_limit_sec
+                            )
+                except RuntimeError as e:
+                    self.engine._log("ERROR", f"Engine connection lost during analysis: {e}. Worker terminating gracefully.")
+                    break
                 
                 played_wr = played_eval.winrate if played_eval else 0.5
                 

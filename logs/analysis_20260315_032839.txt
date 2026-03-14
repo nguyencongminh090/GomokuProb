@@ -1,0 +1,5 @@
+=== Gomoku Analysis Log - 20260315_032839 ===
+
+[03:28:43.370] [REPORT] Game loaded successfully: 0 moves.
+[03:28:44.262] [INFO  ] Starting analysis from Move #5 (Index 4)
+[03:28:44.265] [REPORT] Analysis started...

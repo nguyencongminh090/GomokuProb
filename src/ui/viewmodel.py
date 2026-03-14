@@ -14,6 +14,8 @@ from src.services.parser import GameParser
 from src.core.v2_worker import V2AnalysisWorker, V2MoveResult, V2GameResult
 from src.core.profile_store import ProfileStore
 
+from src.services.llm_report_service import LLMReportWorker
+
 from src.core.state import SystemState, EngineState
 
 class MainViewModel(QObject):
@@ -29,6 +31,7 @@ class MainViewModel(QObject):
     current_move_idx = pyqtSignal(int)
     visible_step_changed = pyqtSignal(int)
     analysis_progress = pyqtSignal(int, int)  # current, total
+    llm_report_generated = pyqtSignal(str)    # LLM verdict text
     
     # Deprecated (kept for temporary compat if needed, but we will update MainWindow)
     # is_analyzing = pyqtSignal(bool) 
@@ -51,6 +54,12 @@ class MainViewModel(QObject):
         self.current_board: Optional[BoardState] = None
         self.worker: Optional[V2AnalysisWorker] = None
         self.thread: Optional[QThread] = None # Explicitly shadow QObject.thread() method
+        
+        self.llm_worker: Optional[LLMReportWorker] = None
+        self.llm_thread: Optional[QThread] = None
+        
+        self.last_game_result: Optional[V2GameResult] = None # Store the most recent result for LLM
+        
         self._state = SystemState.IDLE
         self.visible_step = 0 # 0 means empty board, N means N moves shown
 
@@ -206,9 +215,44 @@ class MainViewModel(QObject):
     def _on_game_complete(self, result: V2GameResult):
         """Handle V2 game analysis completion."""
         # Emit final result for UI
+        self.last_game_result = result
         self.game_result.emit(result)
         
         # Log final classification
         if result.classification:
             c = result.classification
             print(f"V2 FINAL: P(Cheat)={c.p_cheat*100:.1f}% | Class={c.classification} | Conf={c.confidence*100:.0f}%")
+
+    def generate_llm_report(self):
+        """Starts the LLM generation process in a background thread."""
+        if not self.last_game_result:
+            self.llm_report_generated.emit("❌ Error: No analysis result found. Please run a full analysis first.")
+            return
+            
+        if self.llm_thread and self.llm_thread.isRunning():
+            self.llm_report_generated.emit("⏳ Wait: LLM report is already generating...")
+            return
+            
+        self.llm_report_generated.emit("⏳ Generating LLM report based on analysis findings... Please wait.")
+        
+        self.llm_thread = QThread()
+        self.llm_worker = LLMReportWorker(self.config, self.last_game_result)
+        self.llm_worker.moveToThread(self.llm_thread)
+        
+        self.llm_thread.started.connect(self.llm_worker.run)
+        self.llm_worker.finished.connect(self.llm_thread.quit)
+        self.llm_worker.finished.connect(self.llm_worker.deleteLater)
+        
+        # Route signals
+        self.llm_worker.report_ready.connect(self._on_llm_report_ready)
+        self.llm_worker.error_occurred.connect(self._on_llm_report_error)
+        
+        self.llm_thread.start()
+
+    def _on_llm_report_ready(self, report_text: str):
+        """Called when LLM completes successfully."""
+        self.llm_report_generated.emit(f"\n{'='*50}\n🧠 LLM VERDICT:\n{'='*50}\n\n{report_text}\n")
+
+    def _on_llm_report_error(self, error_msg: str):
+        """Called if LLM request fails."""
+        self.llm_report_generated.emit(f"\n❌ LLM Error: {error_msg}")

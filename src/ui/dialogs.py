@@ -216,6 +216,30 @@ class SettingsDialog(QDialog):
         self.chk_em_fitting.setChecked(self.config.enable_em_fitting)
         self.chk_em_fitting.setToolTip("Estimate optimal π, λ_good, λ_blunder from game data")
         layout.addRow("EM Fitting:", self.chk_em_fitting)
+
+        # === LLM Generation Section ===
+        layout.addRow(QLabel(""))  # Spacer
+        layout.addRow(QLabel("<b>LLM Report Generation</b>"))
+
+        # Provider
+        self.combo_llm_provider = QComboBox()
+        self.combo_llm_provider.addItems(["gemini", "openai", "groq"])
+        self.combo_llm_provider.setCurrentText(self.config.llm_provider)
+        layout.addRow("LLM Provider:", self.combo_llm_provider)
+
+        # Model Name
+        self.llm_model_edit = QLineEdit(self.config.llm_model)
+        layout.addRow("Model Name:", self.llm_model_edit)
+
+        # API Key
+        self.llm_apikey_edit = QLineEdit(self.config.llm_api_key)
+        self.llm_apikey_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.llm_apikey_edit.setPlaceholderText("Enter API Key...")
+        layout.addRow("API Key:", self.llm_apikey_edit)
+
+        # Endpoint URL
+        self.llm_url_edit = QLineEdit(self.config.llm_endpoint_url)
+        layout.addRow("Endpoint URL:", self.llm_url_edit)
         
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | 
@@ -253,4 +277,9 @@ class SettingsDialog(QDialog):
             # V4 Analysis Options
             enable_model_selection=self.chk_model_selection.isChecked(),
             enable_em_fitting=self.chk_em_fitting.isChecked(),
+            # LLM Config
+            llm_provider=self.combo_llm_provider.currentText(),
+            llm_model=self.llm_model_edit.text(),
+            llm_api_key=self.llm_apikey_edit.text(),
+            llm_endpoint_url=self.llm_url_edit.text()
         )

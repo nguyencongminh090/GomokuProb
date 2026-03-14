@@ -1,0 +1,17 @@
+=== Gomoku Analysis Log - 20260315_032238 ===
+
+[03:22:45.875] [REPORT] Settings updated: Rule=Standard, Time=5000ms
+[03:22:51.191] [REPORT] Game loaded successfully: 25 moves.
+[03:22:52.766] [INFO  ] Starting analysis from Move #5 (Index 4)
+[03:22:52.770] [REPORT] Analysis started...
+[03:22:52.775] [INFO  ] Engine State changed to: STARTING
+[03:22:52.775] [ERROR ] Failed to start engine: Failed to start engine '/media/ngmint/Data/Programming/Python/Personal/GomoProb/engine/pbrain-rapfi-v4': [Errno 2] No such file or directory: '/media/ngmint/Data/Programming/Python/Personal/GomoProb/engine'
+[03:22:52.775] [INFO  ] Engine State changed to: ERROR
+[03:22:52.777] [STAGE ] 
+[03:22:52.777] [STAGE ] ==================================================
+[03:22:52.777] [STAGE ] V2 ANALYZING MOVE #5: j5
+[03:22:52.777] [STAGE ] ==================================================
+[03:22:52.777] [INFO  ] Engine State changed to: ANALYZING
+[03:22:52.777] [CMD   ] STOP (reset for fresh search)
+[03:22:52.871] [STAGE ] INPUT: Position [4 moves]: l2(B) f10(W) n4(B) k5(W)
+[03:22:52.871] [INFO  ] Engine State changed to: IDLE
