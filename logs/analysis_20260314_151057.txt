@@ -24637,3 +24637,10 @@
 [15:41:57.369] [INFO  ] Soft Stop requested...
 [15:41:57.369] [STDIN ] STOP
 [15:41:57.370] [REPORT] Analysis finished/stopped.
+[15:53:18.734] [REPORT] Stopping analysis...
+[15:53:18.734] [INFO  ] Engine State changed to: STOPPING
+[15:53:18.734] [STDIN ] END
+[15:53:18.742] [INFO  ] Engine State changed to: OFF
+[15:53:18.742] [REPORT] Analysis finished/stopped.
+
+=== Session Ended ===

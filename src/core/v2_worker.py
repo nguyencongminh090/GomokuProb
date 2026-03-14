@@ -21,7 +21,7 @@ from src.core.player_model import BayesianPlayerModel, PlayerClassification
 from src.core.temporal_model import TemporalModel, TemporalAnalysis
 from src.core.feature_extractor import FeatureExtractor, FeatureVector
 from src.core.pattern_analysis import PatternAnalyzer
-from src.core.profile_store import ProfileStore, ProfileRecord
+from src.core.profile_store import ProfileStore, GameRecord, compute_quality_score, is_baseline_eligible
 from src.core.profile_analyzer import ProfileAnalyzer, ProfileResult
 from src.core.information_theory import InformationTheory
 from src.core.complexity import (
@@ -127,15 +127,21 @@ class V2AnalysisWorker(QObject):
         board: BoardState,
         config: AnalysisConfig,
         player_name: str = "",
-        save_to_profile: bool = False
+        save_to_profile: bool = False,
+        outcome: str = "unknown",   # 'win' | 'loss' | 'draw' | 'unknown'
+        platform: str = "local",
+        skill_tier: str = "T3",
     ):
         super().__init__()
         self.engine = engine_service
         self.board = board
         self.config = config
-        self.player_name = player_name.strip()
+        self.player_name    = player_name.strip()
         self.save_to_profile = save_to_profile
-        self.is_running = True
+        self.outcome        = outcome
+        self.platform       = platform
+        self.skill_tier     = skill_tier
+        self.is_running     = True
         
         # Profile DB
         self.profile_store = ProfileStore()
@@ -181,6 +187,17 @@ class V2AnalysisWorker(QObject):
         
         total_moves = len(self.board.moves)
         
+        # Load player-specific lambda baseline (Tier 2) if available
+        if self.player_name and self.save_to_profile:
+            baseline = self.profile_store.get_baseline_lambda(self.player_name)
+            if baseline["status"] == "OK":
+                self.player_model.lambda_human = baseline["lambda"]
+                self.engine._log(
+                    "INFO",
+                    f"Profile baseline loaded: λ_human={baseline['lambda']:.1f} "
+                    f"(n={baseline['n_games']} games, "
+                    f"CI=[{baseline['ci_lower']:.1f}, {baseline['ci_upper']:.1f}])"
+                )
         # Setup board state
         current_board = BoardState(self.board.size)
         start_idx = max(0, self.config.start_move - 1)
@@ -599,47 +616,76 @@ class V2AnalysisWorker(QObject):
             layer2_result=layer2_result,
         )
         
-        # V4 Profile Saving (Paper Section 8 strict baseline rules)
+        # V4 Profile Saving — ALWAYS write (Two-Tier: quality score controls weight)
         if self.player_name and self.save_to_profile:
-            # Strict logic: must be Human, confident >= 0.7, p_cheat < 0.20, and enough moves
-            is_baseline_game = (
-                classification.classification == "Human" and
-                classification.confidence >= 0.70 and
-                classification.p_cheat < 0.20 and
-                len(move_analyses) >= 44
-            )
-            
-            record = ProfileRecord(
-                player_name=self.player_name,
-                timestamp="", # Auto-generated
-                lambda_mle=features.lambda_mle,
-                mean_delta=features.mean_delta,
-                num_moves=len(move_analyses),
-                skill_tier="T_Unassigned", # Could map this via lambda_human
-                lambda_human=self.player_model.mixture_model.lambda_good,
-                classification=classification.classification,
-                confidence=classification.confidence,
-                is_baseline=is_baseline_game,
-                # Layer 2 sequential analysis fields
-                z_runs=layer2_result.z_runs if layer2_result else None,
-                p_runs=layer2_result.p_runs if layer2_result else None,
-                rho1=layer2_result.rho1 if layer2_result else None,
-                p_acf=layer2_result.p_acf if layer2_result else None,
-                cusum_max=layer2_result.cusum_max if layer2_result else None,
-                p_cusum=layer2_result.p_cusum if layer2_result else None,
-                change_point=layer2_result.change_point if layer2_result else None,
-                cac=layer2_result.cac if layer2_result else None,
-                p_cac=layer2_result.p_cac if layer2_result else None,
-                shannon_entropy=layer2_result.shannon_entropy if layer2_result else None,
-                p_entropy=layer2_result.p_entropy if layer2_result else None,
-                ensemble_score=layer2_result.ensemble_score if layer2_result else None,
-                fisher_chi2=layer2_result.fisher_chi2 if layer2_result else None,
-                layer2_verdict=layer2_result.verdict if layer2_result else None,
-            )
-            self.profile_store.add_game(record)
-            self.engine._log("INFO", f"Saved game to profile for '{self.player_name}' (Baseline: {is_baseline_game})")
+            # Compute game-level aggregates for the new schema
+            c_finals = [r.position_complexity for r in move_results]
+            avg_c_final   = sum(c_finals) / len(c_finals) if c_finals else None
+            midgame_moves = sum(1 for c in c_finals if c > 0.25)
 
-        
+            # Build per-move detail list for moves table
+            per_move_detail = []
+            for idx, (mr, ma) in enumerate(zip(move_results, move_analyses)):
+                per_move_detail.append({
+                    "delta":         mr.delta,
+                    "c_final":       mr.position_complexity,
+                    "best_wr":       mr.best_winrate,
+                    "played_wr":     mr.played_winrate,
+                    "is_trivial":    mr.position_complexity < 0.10,
+                    "posterior_after": mr.p_cheat_cumulative,
+                    "opp_best_wr":   mr.opponent_analysis.opp_best if mr.opponent_analysis else None,
+                })
+
+            record = GameRecord(
+                player_id        = self.player_name,
+                played_at        = __import__('datetime').datetime.now().isoformat(),
+                outcome          = self.outcome,
+                total_moves      = len(self.board.moves),
+                analyzed_moves   = len(move_analyses),
+                avg_c_final      = avg_c_final,
+                midgame_moves    = midgame_moves,
+                # Layer 1
+                lambda_mle       = features.lambda_mle,
+                mean_delta       = features.mean_delta,
+                near_optimal_pct = features.near_optimal_ratio,
+                p_cheat          = classification.p_cheat,
+                log_lr           = log_lambda,
+                confidence       = classification.confidence,
+                tau_mle          = temperature_mle,
+                classification   = classification.classification,
+                em_pi            = em_pi if em_pi > 0 else None,
+                em_lambda_good   = em_lg if em_pi > 0 else None,
+                em_lambda_blunder= em_lb if em_pi > 0 else None,
+                best_dist_model  = best_dist_name,
+                # Layer 2
+                l2_runs_z            = layer2_result.z_runs       if layer2_result else None,
+                l2_runs_p            = layer2_result.p_runs       if layer2_result else None,
+                l2_acf_rho1          = layer2_result.rho1         if layer2_result else None,
+                l2_acf_p             = layer2_result.p_acf        if layer2_result else None,
+                l2_cusum_max         = layer2_result.cusum_max    if layer2_result else None,
+                l2_cusum_trigger     = layer2_result.cusum_triggered if layer2_result else None,
+                l2_cusum_changepoint = layer2_result.change_point if layer2_result else None,
+                l2_cusum_p           = layer2_result.p_cusum      if layer2_result else None,
+                l2_cac               = layer2_result.cac          if layer2_result else None,
+                l2_cac_p             = layer2_result.p_cac        if layer2_result else None,
+                l2_entropy_h         = layer2_result.shannon_entropy if layer2_result else None,
+                l2_entropy_p         = layer2_result.p_entropy    if layer2_result else None,
+                l2_fisher_chi2       = layer2_result.fisher_chi2  if layer2_result else None,
+                l2_vote_score        = layer2_result.ensemble_score if layer2_result else None,
+                l2_verdict           = layer2_result.verdict       if layer2_result else None,
+                l2_tests_run         = layer2_result.ensemble_flags if layer2_result else 0,
+                moves                = per_move_detail,
+            )
+            game_id = self.profile_store.save_game(
+                record, platform=self.platform, skill_tier=self.skill_tier
+            )
+            self.engine._log(
+                "INFO",
+                f"Saved game '{game_id[:8]}' for '{self.player_name}' | "
+                f"quality={record.quality_score:.2f} | "
+                f"baseline_eligible={record.is_baseline_eligible}"
+            )
+
         # Log final results
         self.engine._log("STAGE", f"")
         self.engine._log("STAGE", f"{'='*50}")
