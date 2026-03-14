@@ -31,7 +31,8 @@ Advanced Metrics (V3/V4):
 - 'em_lambda_blunder': The lambda of their "Blunder" moves.
 
 Context:
-- 'cusum_triggered': A Boolean indicating a sudden shift in play strength mid-game (switching a bot on/off).
+- 'cusum_triggered': A Boolean indicating a shift in play strength (e.g., toggling a bot).
+- 'cusum_change_point': If CUSUM triggered, the move number where the shift occurred. If this is 1 (or very early), it means they played with engine-like precision from the opening, NOT a "mid-game" shift.
 - 'profile_history': Details from their historical profile.
 
 INSTRUCTIONS:
@@ -58,8 +59,10 @@ INSTRUCTIONS:
 
         # Determine Layer 2 CUSUM flag
         cusum_triggered = False
-        if result.layer2_result and result.layer2_result.cusum_triggered:
-            cusum_triggered = True
+        cusum_change_point = None
+        if result.layer2_result:
+            cusum_triggered = result.layer2_result.cusum_triggered
+            cusum_change_point = result.layer2_result.change_point
 
         payload_dict = {
             "classification": result.classification.classification,
@@ -74,6 +77,7 @@ INSTRUCTIONS:
             "em_lambda_good": round(result.em_lambda_good, 2),
             "em_lambda_blunder": round(result.em_lambda_blunder, 2),
             "cusum_triggered": cusum_triggered,
+            "cusum_change_point": cusum_change_point,
             "profile_history": profile_data
         }
         

@@ -370,12 +370,14 @@ class CUSUMTest:
     """
 
     MIN_N = 15
-    H_THRESHOLD = 3.0
-    LAMBDA_HUMAN = 5.0      # Null hypothesis λ₀
-    LAMBDA_CHEATER = 50.0   # Alternative λ₁
+    H_THRESHOLD = 4.0  # Increased from 3.0 to reduce oversensitivity on strong human openings.
+    
+    # Defaults in case not provided, but we will pass them dynamically
+    LAMBDA_HUMAN = 10.0      
+    LAMBDA_CHEATER = 70.0
 
     @classmethod
-    def _score(cls, delta: float, complexity: float) -> float:
+    def _score(cls, delta: float, complexity: float, lambda_h: float, lambda_c: float) -> float:
         """
         Per-move score s_i = C_i · log(p(Δ|H1)/p(Δ|H0))  (Eq. cusum_score).
 
@@ -384,8 +386,8 @@ class CUSUMTest:
         """
         d = max(delta, 1e-4)
         log_ratio = (
-            math.log(cls.LAMBDA_CHEATER / cls.LAMBDA_HUMAN)
-            - (cls.LAMBDA_CHEATER - cls.LAMBDA_HUMAN) * d
+            math.log(lambda_c / lambda_h)
+            - (lambda_c - lambda_h) * d
         )
         return complexity * log_ratio
 
@@ -394,6 +396,8 @@ class CUSUMTest:
         cls,
         deltas: List[float],
         complexities: List[float],
+        lambda_h: float = LAMBDA_HUMAN,
+        lambda_c: float = LAMBDA_CHEATER,
     ) -> Tuple[Optional[float], Optional[int], Optional[float], dict]:
         """
         Returns:
@@ -407,7 +411,7 @@ class CUSUMTest:
         s_values = [0.0] * n
         s_prev = 0.0
         for i in range(n):
-            s_i = s_prev + cls._score(deltas[i], complexities[i])
+            s_i = s_prev + cls._score(deltas[i], complexities[i], lambda_h, lambda_c)
             s_values[i] = max(0.0, s_i)
             s_prev = s_values[i]
 
@@ -727,6 +731,8 @@ class SequentialPatternAnalyzer:
         deltas: List[float],
         complexities: List[float],
         blunder_rate_baseline: float = 0.20,
+        lambda_h: float = 10.0,
+        lambda_c: float = 70.0,
     ) -> SequentialAnalysisResult:
         """
         Run all five tests and the ensemble detector.
@@ -770,7 +776,7 @@ class SequentialPatternAnalyzer:
         result.acf_test_ran = diag2.get("ran", False)
 
         # --- Test 3: CUSUM ---
-        cusum_max, cp, p_cusum, diag3 = CUSUMTest.run(deltas, complexities)
+        cusum_max, cp, p_cusum, diag3 = CUSUMTest.run(deltas, complexities, lambda_h, lambda_c)
         result.cusum_max = cusum_max
         result.change_point = cp
         result.p_cusum = p_cusum

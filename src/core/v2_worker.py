@@ -558,6 +558,8 @@ class V2AnalysisWorker(QObject):
                 layer2_result = spa.analyze(
                     deltas=deltas,
                     complexities=layer2_complexities,
+                    lambda_h=self.config.lambda_human,
+                    lambda_c=self.config.lambda_cheater,
                 )
                 # Layer 1 → Layer 2 escalation
                 if (

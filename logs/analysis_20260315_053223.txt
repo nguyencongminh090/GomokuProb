@@ -8875,3 +8875,10 @@ Crucially, the `cusum_triggered` event strongly suggests a mid-game activation o
 
 **Recommendation:** Despite the "Suspicious" classification and a `p_cheat` below 50%, the sheer strength and consistency of the individual cheating metrics, especially the `temperature_mle` and the `cusum_triggered` event, warrant **immediate manual review and strong consideration for disciplinary action.** This is a statistical probability analysis, not absolute proof, but the data here provides a robust foundation for further investigation.
 
+[06:03:04.678] [REPORT] Stopping analysis...
+[06:03:04.678] [INFO  ] Engine State changed to: STOPPING
+[06:03:04.678] [STDIN ] END
+[06:03:04.686] [INFO  ] Engine State changed to: OFF
+[06:03:04.686] [REPORT] Analysis finished/stopped.
+
+=== Session Ended ===
