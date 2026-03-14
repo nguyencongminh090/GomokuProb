@@ -1,0 +1,7 @@
+=== Gomoku Analysis Log - 20260314_165237 ===
+
+[16:52:39.082] [REPORT] Error: ProfileStore is not initialized in ViewModel.
+[16:52:43.282] [REPORT] Stopping analysis...
+[16:52:43.282] [REPORT] Analysis finished/stopped.
+
+=== Session Ended ===

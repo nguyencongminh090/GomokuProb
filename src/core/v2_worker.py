@@ -575,7 +575,9 @@ class V2AnalysisWorker(QObject):
         # ----------------------------
         profile_res = None
         if self.player_name:
-            history = self.profile_store.get_baseline_games(self.player_name)
+            # V2 Profile Analyzer expects a list of dictionaries/objects with at least a 'lambda_mle' key
+            all_games = self.profile_store.get_all_games(self.player_name)
+            history = [g for g in all_games if g.get("is_baseline_eligible", 0) == 1]
             profile_res = ProfileAnalyzer.analyze_suspect_game(features.lambda_mle, history)
             
             # Escalation Rules (Paper Section 10.2)

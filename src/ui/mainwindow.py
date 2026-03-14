@@ -19,6 +19,7 @@ from src.ui.widgets.console_widget import EngineConsoleWidget
 from src.ui.widgets.analysis_log_widget import AnalysisLogWidget
 from src.ui.viewmodel import MainViewModel
 from src.ui.dialogs import PastePositionDialog, SettingsDialog
+from src.ui.db_view_dialog import DatabaseViewDialog
 from src.core.state import SystemState
 
 class MainWindow(QMainWindow):
@@ -133,11 +134,14 @@ class MainWindow(QMainWindow):
         self.chk_save_profile = QCheckBox("Save to DB")
         self.chk_save_profile.setChecked(True)
         
+        self.btn_db_viewer = QPushButton("View Database")
+        
         self.btn_analyze = QPushButton("Start Analysis") # Text will toggle
         self.btn_analyze.setEnabled(False) # Disable until loaded
         
         controls_layout.addWidget(self.btn_load)
         controls_layout.addWidget(self.btn_settings)
+        controls_layout.addWidget(self.btn_db_viewer)
         controls_layout.addWidget(self.player_input)
         controls_layout.addWidget(self.chk_save_profile)
         controls_layout.addWidget(self.btn_analyze)
@@ -178,6 +182,7 @@ class MainWindow(QMainWindow):
         # Connect load button to a menu for options
         self.btn_load.setMenu(self.create_load_menu())
         self.btn_settings.clicked.connect(self.open_settings)
+        self.btn_db_viewer.clicked.connect(self.open_db_viewer)
         self.btn_analyze.clicked.connect(self.toggle_analysis)
         
         self.btn_first.clicked.connect(self.view_model.step_first)
@@ -251,6 +256,13 @@ class MainWindow(QMainWindow):
             self.view_model.update_config(new_config)
             self.log(f"Settings updated: Rule={new_config.rule_name}, Time={new_config.time_limit_ms}ms")
             
+    def open_db_viewer(self):
+        if hasattr(self.view_model, 'profile_store') and self.view_model.profile_store:
+            dialog = DatabaseViewDialog(self.view_model.profile_store, self)
+            dialog.exec()
+        else:
+            self.log("Error: ProfileStore is not initialized in ViewModel.")
+            
     def toggle_analysis(self):
         if self.view_model.state == SystemState.RUNNING:
             self.view_model.stop_analysis()
@@ -270,6 +282,7 @@ class MainWindow(QMainWindow):
             self.btn_analyze.setEnabled(True)
             self.btn_load.setEnabled(False)
             self.btn_settings.setEnabled(False)
+            self.btn_db_viewer.setEnabled(False)
             self.player_input.setEnabled(False)
             self.chk_save_profile.setEnabled(False)
             
@@ -293,6 +306,7 @@ class MainWindow(QMainWindow):
             self.btn_analyze.setEnabled(True)
             self.btn_load.setEnabled(True)
             self.btn_settings.setEnabled(True)
+            self.btn_db_viewer.setEnabled(True)
             self.player_input.setEnabled(True)
             self.chk_save_profile.setEnabled(True)
             self.log("Analysis finished/stopped.")

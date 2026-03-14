@@ -12,6 +12,7 @@ from src.services.parser import GameParser
 
 # V2 Imports
 from src.core.v2_worker import V2AnalysisWorker, V2MoveResult, V2GameResult
+from src.core.profile_store import ProfileStore
 
 from src.core.state import SystemState, EngineState
 
@@ -41,6 +42,7 @@ class MainViewModel(QObject):
              self.config.engine_path = "engine/rapfi"
              
         self.engine_service = EngineService(self.config.engine_path)
+        self.profile_store = ProfileStore()
         # Proxy engine state
         self.engine_service.state_changed.connect(self.engine_state_changed.emit)
         

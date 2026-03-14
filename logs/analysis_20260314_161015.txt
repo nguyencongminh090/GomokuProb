@@ -1,2 +1,6 @@
 === Gomoku Analysis Log - 20260314_161015 ===
 
+[16:14:17.406] [REPORT] Stopping analysis...
+[16:14:17.406] [REPORT] Analysis finished/stopped.
+
+=== Session Ended ===
