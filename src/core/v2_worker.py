@@ -28,6 +28,7 @@ from src.core.complexity import (
     calculate_complexity, calculate_accuracy, ComplexityResult,
     OpponentAnalysis, calculate_opponent_metrics
 )
+from src.core.sequential_analysis import SequentialPatternAnalyzer, SequentialAnalysisResult
 
 
 @dataclass
@@ -97,6 +98,9 @@ class V2GameResult:
     
     # V4: Profile Analysis results (Paper Section 10.2)
     profile_result: Optional[ProfileResult] = None
+
+    # Layer 2 Sequential Pattern Analysis (paper: Sequential_Pattern_Analysi.tex)
+    layer2_result: Optional[SequentialAnalysisResult] = None
 
 
 
@@ -517,6 +521,32 @@ class V2AnalysisWorker(QObject):
         # Temporal analysis
         deltas = [m.delta for m in move_analyses]
         temporal = self.temporal_model.analyze(deltas)
+
+        # ----------------------------
+        # LAYER 2 SEQUENTIAL PATTERN ANALYSIS
+        # ----------------------------
+        layer2_result = None
+        if len(move_analyses) >= 15:
+            try:
+                spa = SequentialPatternAnalyzer()
+                layer2_complexities = [m.position_complexity for m in move_analyses]
+                layer2_result = spa.analyze(
+                    deltas=deltas,
+                    complexities=layer2_complexities,
+                )
+                # Layer 1 → Layer 2 escalation
+                if (
+                    layer2_result.verdict != "Clean"
+                    and layer2_result.verdict != "N/A"
+                    and layer2_result.ensemble_score > 0.40
+                ):
+                    if classification.classification == "Human":
+                        classification.classification = "Suspicious (L2-flagged)"
+                    elif classification.classification == "Suspicious":
+                        classification.classification = "Suspicious-Elevated (L2)"
+            except Exception as e:
+                self.engine._log("ERROR", f"Layer 2 analysis failed: {e}")
+
         
         # Feature extraction
         features = self.feature_extractor.extract(game_analysis)
@@ -565,7 +595,8 @@ class V2AnalysisWorker(QObject):
             em_pi=em_pi,
             em_lambda_good=em_lg,
             em_lambda_blunder=em_lb,
-            profile_result=profile_res
+            profile_result=profile_res,
+            layer2_result=layer2_result,
         )
         
         # V4 Profile Saving (Paper Section 8 strict baseline rules)
@@ -588,7 +619,22 @@ class V2AnalysisWorker(QObject):
                 lambda_human=self.player_model.mixture_model.lambda_good,
                 classification=classification.classification,
                 confidence=classification.confidence,
-                is_baseline=is_baseline_game
+                is_baseline=is_baseline_game,
+                # Layer 2 sequential analysis fields
+                z_runs=layer2_result.z_runs if layer2_result else None,
+                p_runs=layer2_result.p_runs if layer2_result else None,
+                rho1=layer2_result.rho1 if layer2_result else None,
+                p_acf=layer2_result.p_acf if layer2_result else None,
+                cusum_max=layer2_result.cusum_max if layer2_result else None,
+                p_cusum=layer2_result.p_cusum if layer2_result else None,
+                change_point=layer2_result.change_point if layer2_result else None,
+                cac=layer2_result.cac if layer2_result else None,
+                p_cac=layer2_result.p_cac if layer2_result else None,
+                shannon_entropy=layer2_result.shannon_entropy if layer2_result else None,
+                p_entropy=layer2_result.p_entropy if layer2_result else None,
+                ensemble_score=layer2_result.ensemble_score if layer2_result else None,
+                fisher_chi2=layer2_result.fisher_chi2 if layer2_result else None,
+                layer2_verdict=layer2_result.verdict if layer2_result else None,
             )
             self.profile_store.add_game(record)
             self.engine._log("INFO", f"Saved game to profile for '{self.player_name}' (Baseline: {is_baseline_game})")
@@ -652,6 +698,12 @@ class V2AnalysisWorker(QObject):
             self.engine._log("STAGE", f"  ⚠️ SUSPICIOUS: Switch-point detected!")
             for sp in temporal.switch_points:
                 self.engine._log("STAGE", f"    Move {sp.move_index}: {sp.direction} by {sp.magnitude*100:.1f}%")
+        
+        # Log Layer 2 results
+        if layer2_result:
+            report = SequentialPatternAnalyzer.format_report(layer2_result)
+            for line in report.splitlines():
+                self.engine._log("STAGE", line)
         
         self.engine._log("STAGE", f"")
         
